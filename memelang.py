@@ -4,13 +4,13 @@ This script is optimized for prompting LLMs
 
 MEMELANG USES AXES
 AXES ORDERED HIGH TO LOW
-NEVER SPACES BEFORE OPERATOR
+WHITESPACE MEANS "NEW AXIS"
+NEVER SPACES AROUND OPERATOR
 NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES
 NEVER SPACES BEFORE ASSN VAR
-SPACE MEANS "NEW AXIS"
 '''
 
-MEMELANG_VER = 9.09
+MEMELANG_VER = 9.10
 
 import random, re, json
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -18,7 +18,7 @@ from typing import List, Iterator, Iterable, Dict, Tuple, Union
 Axis, Memelang = int, str
 
 ELIDE = ''
-SIGIL, VAL, MSAME, VSAME, ASSN, EOF =  '$', '_', '^', '@', ':', None
+SIGIL, VAL, MSAME, VSAME, ASSN, SMLR, EOF =  '$', '_', '^', '@', ':', '~', None
 SEP_LIMIT, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
 LEFT, RIGHT, AVAR = 0, 1, 2
@@ -32,7 +32,6 @@ TOKEN_KIND_PATTERNS = (
 	('MUL',			r'\*'),
 	('ADD',			r'\+'),
 	('DIV',			r'\/'),
-	('SMLR',		r'\%\%'),
 	('MOD',			r'\%'),
 	#('TSQ',			r'@@'),
 	('L2',			r'<->'),
@@ -45,6 +44,7 @@ TOKEN_KIND_PATTERNS = (
 	('GT',			r'>'),
 	('LT',			r'<'),
 	#('META',		r'`'),
+	('SMLR',		re.escape(SMLR)),
 	('ASSN',		re.escape(ASSN)),
 	('VAL',			re.escape(VAL)),		# VALCARD, MATCHES WHOLE VALUE, NEVER QUOTE
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX-1, VCTR=-1, LIMIT)
@@ -430,13 +430,11 @@ class SQLUtil():
 	def where(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param]]:
 		if limit.opr.kind == 'SEP_PASS': return '', []
 		sym = SQLUtil.cmp2sql[limit.opr.kind]
-		lp, rp = '', ''
+		lp, rp, junc = '', '', ''
 
 		if len(limit[RIGHT]) > 1:
 			lp, rp = '(', ')'
-			if limit.opr.kind == 'EQL': sym = 'IN'
-			elif limit.opr.kind == 'NOT': sym = 'NOT IN'
-			else: raise SyntaxError('E_JUNC_COMP')
+			junc = 'AND' if limit.opr.kind == 'NOT' else 'OR'
 
 		leftsql, params = SQLUtil.select(limit[LEFT], bindings)
 		rights = []
@@ -446,10 +444,10 @@ class SQLUtil():
 			if sym in ('LIKE','ILIKE'):
 				sql = sql.replace('%s', "CONCAT('%', %s, '%')")
 
-			rights.append(sql)
+			rights.append(f"{leftsql} {sym} {sql}")
 			params.extend(subparams)
 
-		return f'{leftsql} {sym} {lp}'+ ', '.join(rights) + rp, params
+		return lp + f' {junc} '.join(rights) + rp, params
 
 	@staticmethod
 	def deref(limit: Limit, bindings: dict) -> Tuple[bool, None|Token]:
@@ -460,20 +458,18 @@ class SQLUtil():
 
 
 class MemeSQLTable(Meme):
-	output = 'meme'
 	primary: str = 'id'
 
 	def select(self) -> Tuple[SQL, List[Param]]:
-		cte_idx: int = 0
 		tbl_idx: int = 0
-		sqlsels: Dict[int, SQL] = {}
+		sqls: list[SQL] = []
 		params: List[Param] = []
 		axis_name: Dict[Axis, str] = {}
 		name_axis: Dict[str, Axis] = {}
 		
 		for mtrx in self:
-			cte_idx+=1
-			froms, wheres, selectrows, selectmemes, sel_params, orders, whr_params, bindings = [], [], [], [], [], [], [], {}
+			selectall = False
+			froms, wheres, selects, sel_params, orders, whr_params, bindings = [], [], [], [], [], [], {}
 			tbl_alias = None
 			prev = {'val': None,'col': None, 'row': None, 'tbl': None}
 
@@ -492,13 +488,15 @@ class MemeSQLTable(Meme):
 				# JOIN
 				if not same['tbl'] or not same['row']:
 
+					if selectall: selects.append(f'{tbl_alias}.*')
+					selectall = False
+
 					# TABLE ALIAS
 					if not curr['tbl'] or curr['tbl'].kind != 'ALNUM': raise SyntaxError('E_TBL_ALNUM')
 					tbl_alias = f't{tbl_idx}'
 					froms.append(f"{curr['tbl']} AS {tbl_alias}")
 					tbl_idx += 1
 					pricol = f"{tbl_alias}.{self.primary}"
-					selectmemes.append(f"'{curr['tbl'].lexeme}'")
 
 					# PRIMARY KEY
 					bindings[VSAME]=prev['row'] if prev['row'] is not None else None
@@ -508,10 +506,16 @@ class MemeSQLTable(Meme):
 						wheres.append(where)
 						whr_params.extend([p for p in param if p is not None])
 
-					selectrows.append(f'{pricol}')
-					selectmemes.append(pricol)
+					selects.extend([f"'{curr['tbl'].lexeme}' AS _a3", f"{pricol} AS _a2"])
 
-				if not curr['col'] or curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
+
+				left = vctr[name_axis['val']][0]
+
+				if not curr['col']: raise SyntaxError('E_COL')
+				elif curr['col'].kind == 'VAL' and left[0].kind == 'VAL': # LEFT CHECK IS LAZY
+					selectall=True
+					continue
+				elif curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
 
 				col_name = curr['col'].datum
 				col_alias = f"{tbl_alias}.{col_name}"
@@ -520,10 +524,9 @@ class MemeSQLTable(Meme):
 				curr['val']=bindings[VAL]=Token('DBCOL', col_alias)
 
 				# SELECT
-				select, param = SQLUtil.select(vctr[name_axis['val']][0], bindings)
+				select, param = SQLUtil.select(left, bindings)
 				if select:
-					selectrows.append(f'{select}')
-					selectmemes.extend([f"'{col_name}'", select, f"'{SEP_VCTR}'"])
+					selects.append(select)
 					sel_params.extend([p for p in param if p is not None])
 
 				# WHERE
@@ -538,12 +541,12 @@ class MemeSQLTable(Meme):
 				prev = curr.copy()
 
 			params.extend(sel_params+whr_params)
-			selectmemes.append(f"'{SEP_MTRX}'")
+			if selectall: selects.append(f'{tbl_alias}.*')
+			selects.append(f"'{SEP_MTRX}' as _sm")
 
 			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join(wheres)
 			orderstr = '' if not orders else ' ORDER BY ' + ', '.join(orders)	
 
-			if self.output=='meme': sqlsels[cte_idx] = f'SELECT CONCAT_WS(\'{SEP_LIMIT}\', ' + ', '.join(selectmemes) + f') AS meme FROM ' + ', '.join(froms) + wherestr + orderstr
-			else: sqlsels[cte_idx] = 'SELECT ' + ', '.join(selectrows) + ' FROM ' + ', '.join(froms) + wherestr + orderstr
+			sqls.append('SELECT ' + ', '.join(selects) + ' FROM ' + ', '.join(froms) + wherestr + orderstr)
 
-		return ' UNION ALL '.join(sqlsels[k] for k in sqlsels) +';', params
+		return ' UNION ALL '.join(s for s in sqls) +';', params
