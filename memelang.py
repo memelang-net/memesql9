@@ -10,7 +10,7 @@ NEVER SPACE BETWEEN COMPARATOR/COMMA AND VALUES
 NEVER SPACE BEFORE SEP_META
 '''
 
-MEMELANG_VER = 9.14
+MEMELANG_VER = 9.15
 
 import random, re, json
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -323,43 +323,43 @@ class Fuzz():
 		if kind=='FLOAT': return str(random.uniform(-9, 9))
 		if kind=='VAR': return SIGIL + Fuzz.datum('ALNUM')
 		if kind=='EMB': return '[' + ','.join([str(random.uniform(0,1)) for _ in range(4)]) + ']'
-		if kind=='PROB': return str(random.uniform(0, 1))
+
+	@staticmethod
+	def lterm(mode: str) -> Memelang:
+		term = random.choice(['', VAL])
+		if mode=='VEC': term += random.choice(['<=>','<->','<#>']) + Fuzz.datum('EMB') 
+		return term
+
+	@staticmethod
+	def rterm(mode: str) -> Memelang:
+		if mode == 'NUM':
+			term = Fuzz.datum('FLOAT')
+			if random.randint(0,1): term = random.choice(['+','-','*','/']) + Fuzz.datum('FLOAT')
+		elif mode == 'STR': term = random.choice([Fuzz.datum('QUOT'), Fuzz.datum('ALNUM')])
+		elif mode=='VEC': term = Fuzz.datum('EMB')
+		return term
+
+	@staticmethod
+	def junc(mode: str) -> Memelang:
+		if mode == 'STR': return SEP_OR.join(Fuzz.rterm(mode) for _ in range(random.randint(1,5)))
+		else: return Fuzz.rterm(mode)
 
 	@staticmethod
 	def limit(bindings: List[str]|None = None) -> Memelang:
 		if not bindings: bindings = []
 
+		mode: str
 		data: Memelang = ''
 
 		comp = random.choice(['=','!=','>','<','<=','>='])
 
-		# EMBEDDING
-		if comp in {'<','<=','>','>='} and random.randint(0, 2):
-			data += VAL + '<=>' + Fuzz.datum('EMB') 
-			if random.randint(0, 1): data += comp + Fuzz.datum('PROB')
-
-		# FILTER
+		if comp in {'<','<=','>','>='}:
+			if random.randint(0, 3): mode='NUM'
+			else mode='VEC'
 		else:
-			# LEFT
-			if random.randint(0, 1): data += VAL
+			mode='STR'
 
-			data+=comp
-
-			# RIGHT
-			if comp in {'=','!=','!'}:
-				data_list_len = random.randint(1, 5)
-				data_list: List[Memelang] = []
-				for _ in range(data_list_len):
-					datum_type = random.randint(1, 7)
-					if datum_type == 1:  data_list.append(Fuzz.datum('QUOT'))
-					elif datum_type == 2:  data_list.append(Fuzz.datum('FLOAT'))
-					elif datum_type == 3 and bindings: data_list.append(random.choice(bindings))
-					elif datum_type == 4 and VSAME in bindings: data_list.append(VSAME)
-					else: data_list.append(Fuzz.datum('ALNUM'))
-				data += SEP_OR.join(data_list)
-			else: data += Fuzz.datum('FLOAT')
-
-		return data
+		return Fuzz.lterm(mode) + comp + Fuzz.junc(mode)
 
 	@staticmethod
 	def vector(limit_len:int = 4) -> Memelang:
@@ -367,7 +367,7 @@ class Fuzz():
 		for i in range(limit_len):
 			if i>0: bindings.append(VSAME)
 			vector.append(Fuzz.limit(bindings))
-		return SEP_AXIS.join(vector) + SEP_VCTR_PRETTY
+		return SEP_AXIS.join(vector)
 
 	@staticmethod
 	def mtrx_table(col_len:int = 5) -> Memelang:
@@ -409,6 +409,8 @@ ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
 
 class SQLUtil():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
+	metas = {"grp","asc","dsc","sum","avg","min","max"}
+
 	@staticmethod
 	def holder(token: Token, bindings: dict) -> SQL:
 		if token.kind == 'DBCOL': return token.datum
@@ -446,6 +448,7 @@ class SQLUtil():
 		agg = ANONE
 		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
 		for t in axis[RIGHT:]:
+			if any(t.lexeme not in SQLUtil.metas for t in axis[RIGHT:]): raise SyntaxError('E_META_BAD')
 			if t.lexeme in agg_func:
 				if agg: raise SyntaxError('E_DBL_AGG')
 				agg = AHAV
