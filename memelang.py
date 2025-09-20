@@ -23,7 +23,7 @@ SQL COLS: SELECT t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE 
 SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name
 '''
 
-MEMELANG_VER = 9.04
+MEMELANG_VER = 9.06
 
 import random, re, json, operator
 from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
@@ -40,7 +40,7 @@ TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
 	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EXOTIC CHARS "John \"Jack\" Kennedy"
 	('MTBL',		r'-*\|'),
-	('VEC',			r'\[(?:-?\d+(?:\.\d+)?)(?:,-?\d+(?:\.\d+)?)*\]'),
+	('EMB',			r'\[(?:-?\d+(?:\.\d+)?)(?:,-?\d+(?:\.\d+)?)*\]'), # JSON ARRAY OF FLOATS [0.1,0.2]
 
 	('POW',			r'\*\*'),
 	('MUL',			r'\*'),
@@ -82,15 +82,14 @@ TOKEN_KIND_PATTERNS = (
 MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN_KIND_PATTERNS))
 
 CMP_KINDS = {'EQL':{'STR','NUM','DATA'},'NOT':{'STR','NUM','DATA'},'GT':{'NUM'},'GE':{'NUM'},'LT':{'NUM'},'LE':{'NUM'}}
-MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'VEC'},'IP':{'VEC'},'COS':{'VEC'},'TSQ':{'TSQ'}}
-DATUM_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','VEC'}
+MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'EMB'},'IP':{'EMB'},'COS':{'EMB'},'TSQ':{'TSQ'}}
+DATUM_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','EMB'}
 IGNORE_KINDS = {'COMMENT','MTBL'}
 
 EBNF = '''
 TERM ::= DATUM [MOD DATUM]
-SQNC ::= TERM {TERM}
-JUNC ::= {SQNC} {SEP_OR {SQNC}}
-LIMIT ::= [SQNC] [CMP] [JUNC]
+JUNC ::= {TERM} {SEP_OR {TERM}}
+LIMIT ::= [JUNC] [CMP] [JUNC]
 VCTR ::= LIMIT {SEP_LIMIT LIMIT}
 MTRX ::= VCTR {SEP_VCTR VCTR}
 MEME ::= MTRX {SEP_MTRX MTRX}
@@ -104,7 +103,7 @@ class Token():
 		self.kind = [kind]
 		self.lexeme = lexeme
 		if kind == 'QUOT': 		self.datum = json.loads(lexeme)
-		elif kind == 'VEC': 	self.datum = json.loads(lexeme)
+		elif kind == 'EMB': 	self.datum = json.loads(lexeme)
 		elif kind == 'FLOAT': 	self.datum = float(lexeme)
 		elif kind == 'INT':		self.datum = int(lexeme)
 		else: 					self.datum = lexeme
@@ -176,22 +175,17 @@ class Node(list):
 		return kind
 
 
-# +5
+# 1+2
 class Term(Node):
 	opr: Token = TOK_SEP_TOK
 
 
-# 5+6/7
-class Sqnc(Node):
-	opr: Token = TOK_SEP_TERM
-
-
-# (5+6/7 OR 1+2+3)
+# (1+2 OR 3+4)
 class Junc(Node):
 	opr: Token = TOK_SEP_OR
 
 
-# Value > (5+6/7 OR 1+2+3)
+# Value > (1+2 OR 3+4)
 class Limit(Node):
 	opr: Token = TOK_SEP_PASS
 	def check(self) -> 'Limit':
@@ -225,37 +219,40 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 	while tokens.peek():
 
 		# LIMIT: Single axis constraint
-		limit = Limit(Sqnc(), Junc())
+		limit = Limit(Junc(), Junc())
 		side = None
 
 		while tokens.peek() in LIMIT_KINDS:
 
-			# CMP
 			if tokens.peek() in CMP_KINDS:
 				if side == RIGHT: raise SyntaxError('E_CMP_EXTRA')
 				side, limit.opr = RIGHT, tokens.next()
 				if tokens.peek() == 'SEP_LIMIT': raise SyntaxError('E_CMP_SPACE'); # NEVER SPACES INSIDE AXIS BETWEEN COMPARATOR AND VALUES
 
-			# Start LEFT or RIGHT
 			elif side is None:
 				if tokens.peek() == 'VAL': side = LEFT
 				else: side, limit.opr = RIGHT, TOK_EQL
 
-			# SQNC
-			sqnc = Sqnc()
-			while tokens.peek() in DATUM_KINDS:
-				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
-				term=Term(tokens.next())
+			while True:
+				term=Term()
+				
+				if side == LEFT:
+					if tokens.peek() in MOD_KINDS: term.append(Token('VAL',''))
+					elif tokens.peek() != 'VAL': raise SyntaxError('E_LEFT_DATUM')
+
+				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_TERM_DATUM')
+				term.append(tokens.next())
 				if tokens.peek() in MOD_KINDS:
 					term.opr=tokens.next()
 					if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
 					term.append(tokens.next())
 
-				sqnc.append(term.check())
+				limit[side].append(term.check())
 
-			if sqnc: limit[side].append(sqnc.check())
-
-			if tokens.peek() == 'SEP_OR': tokens.next()
+				if tokens.peek() == 'SEP_OR':
+					if side == LEFT: raise SyntaxError('E_LEFT_OR')
+					tokens.next()
+				else: break
 
 		if side is not None:
 			if len(mtrx)==0 and 'VSAME' in limit.kind: raise SyntaxError('E_VSAME_OOB')			
@@ -307,13 +304,11 @@ class Meme(Node):
 				for limit_axis, limit in enumerate(vctr):
 					if not isinstance(limit, Limit): raise TypeError('E_TYPE_LIMIT')
 					# DO VAR BIND HERE
-			self[mtrx_idx].pad(
-				Limit(
-						Sqnc(Term(Token('VAL','')).check()).check(),
-						Junc(Sqnc(Term(Token('VSAME','')).check()).check()).check(),
-						opr=Token('EQL','=')
-					).check()
-			)
+			self[mtrx_idx].pad(Limit(
+					Junc(Term(Token('VAL','')).check()).check(),
+					Junc(Term(Token('VSAME',VSAME)).check()).check(),
+					opr=Token('EQL','')
+				).check())
 
 		self.results = [[[[] for limit in vctr] for vctr in mtrx] for mtrx in self]
 
@@ -326,9 +321,10 @@ class Fuzz():
 	def datum(kind:str) -> Memelang:
 		if kind=='ALNUM': return ''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(5))
 		if kind=='QUOT': return json.dumps(''.join(random.choice(' -_+,./<>[]{}\'"!@#$%^&*()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(10)))
-		if kind=='INT': return str(random.randint(-9, 9))
 		if kind=='FLOAT': return str(random.uniform(-9, 9))
 		if kind=='VAR': return SIGIL + Fuzz.datum('ALNUM')
+		if kind=='EMB': return '[' + ','.join([str(random.uniform(0,1)) for _ in range(4)]) + ']'
+		if kind=='PROB': return str(random.uniform(0, 1))
 
 	@staticmethod
 	def limit(bindings: List[str]|None = None) -> Memelang:
@@ -338,33 +334,31 @@ class Fuzz():
 
 		comp = random.choice(['=','!=','>','<','<=','>='])
 
-		# LEFT
-		explicit_left = random.randint(0, 1)
-		if explicit_left: 
-			data += VAL
-			second_term = random.randint(0, 1)
-			if comp in {'>','<','>=','<='} and second_term:
-				data += random.choice(['+','-','/','*','**']) + Fuzz.datum('INT')
+		# EMBEDDING
+		if comp in {'<','<='} and random.randint(0, 2):
+			data += VAL + '<=>' + Fuzz.datum('EMB') 
+			if random.randint(0, 1): data += comp + Fuzz.datum('PROB')
 
-		data+=comp
-
-		# RIGHT
-		if comp in {'=','!=','!'}:
-			data_list_len = random.randint(1, 5)
-			data_list: List[Any] = []
-			for _ in range(data_list_len):
-				datum_type = random.randint(1, 10)
-				if datum_type == 1:  data_list.append(Fuzz.datum('QUOT'))
-				elif datum_type == 2:  data_list.append(Fuzz.datum('INT'))
-				elif datum_type == 3:  data_list.append(Fuzz.datum('FLOAT'))
-				elif datum_type == 4 and bindings: data_list.append(random.choice(bindings))
-				elif datum_type == 5 and VSAME in bindings: data_list.append(VSAME)
-				else: data_list.append(Fuzz.datum('ALNUM'))
-			data += SEP_OR.join(data_list)
+		# FILTER
 		else:
-			data += Fuzz.datum('FLOAT')
-			second_term = random.randint(0, 1)
-			if second_term: data += random.choice(['+','-','*','/']) + Fuzz.datum('FLOAT')
+			# LEFT
+			if random.randint(0, 1): data += VAL
+
+			data+=comp
+
+			# RIGHT
+			if comp in {'=','!=','!'}:
+				data_list_len = random.randint(1, 5)
+				data_list: List[Any] = []
+				for _ in range(data_list_len):
+					datum_type = random.randint(1, 7)
+					if datum_type == 1:  data_list.append(Fuzz.datum('QUOT'))
+					elif datum_type == 2:  data_list.append(Fuzz.datum('FLOAT'))
+					elif datum_type == 3 and bindings: data_list.append(random.choice(bindings))
+					elif datum_type == 4 and VSAME in bindings: data_list.append(VSAME)
+					else: data_list.append(Fuzz.datum('ALNUM'))
+				data += SEP_OR.join(data_list)
+			else: data += Fuzz.datum('FLOAT')
 
 		return data
 
@@ -378,4 +372,4 @@ class Fuzz():
 
 	@staticmethod
 	def mtrx_table(col_len:int = 5) -> Memelang:
-		return Fuzz.datum('ALNUM') + SEP_LIMIT + VAL + SEP_LIMIT + SEP_VCTR_PRETTY.join(Fuzz.datum('ALNUM') + Fuzz.limit() for _ in range(col_len)) + SEP_MTRX_PRETTY
+		return Fuzz.datum('ALNUM') + SEP_LIMIT + VAL + SEP_LIMIT + SEP_VCTR_PRETTY.join(Fuzz.datum('ALNUM') + SEP_LIMIT + Fuzz.limit() for _ in range(col_len)) + SEP_MTRX_PRETTY
