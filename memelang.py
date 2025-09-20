@@ -8,7 +8,7 @@ NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES
 SPACE MEANS "NEW AXIS"
 '''
 
-MEMELANG_VER = 9.07
+MEMELANG_VER = 9.08
 
 import random, re, json, operator
 from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
@@ -16,10 +16,10 @@ from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
 Axis, Memelang = int, str
 
 ELIDE = ''
-SIGIL, VAL, MSAME, VSAME, EOF =  '$', '_', '^', '@', None
+SIGIL, VAL, MSAME, VSAME, ASSN, EOF =  '$', '_', '^', '@', ':', None
 SEP_LIMIT, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
-LEFT, RIGHT = 0, 1
+LEFT, RIGHT, AVAR = 0, 1, 2
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
@@ -42,6 +42,7 @@ TOKEN_KIND_PATTERNS = (
 	('GT',			r'>'),
 	('LT',			r'<'),
 	#('META',		r'`'),
+	('ASSN',		re.escape(ASSN)),
 	('VAL',			re.escape(VAL)),		# VALCARD, MATCHES WHOLE VALUE, NEVER QUOTE
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX-1, VCTR=-1, LIMIT)
 	('VSAME',		re.escape(VSAME)),		# REFERENCES (MTRX,   VCTR-1,  LIMIT)
@@ -74,7 +75,8 @@ MEME ::= MTRX {SEP_MTRX MTRX}
 '''
 
 class Token():
-	kind: list[str]
+	kind: str
+	kinds: list[str]
 	lexeme: str
 	datum: Union[str, float, int, list]
 	def __init__(self, kind: str, lexeme: str):
@@ -102,6 +104,7 @@ TOK_SEP_OR = Token('SEP_OR', SEP_OR)
 
 TOK_SEP_TOK = Token('SEP_TOK', '')
 TOK_SEP_PASS = Token('SEP_PASS', '')
+TOK_NOVAR = Token('NOVAR', '')
 
 
 class Stream:
@@ -163,11 +166,11 @@ class Junc(Node):
 	opr: Token = TOK_SEP_OR
 
 
-# Value > (1+2 OR 3+4)
+# Value > (1+2 OR 3+4) : $var
 class Limit(Node):
 	opr: Token = TOK_SEP_PASS
 	def check(self) -> 'Limit':
-		if len(self)<1 or len(self)>2: raise SyntaxError('E_NO_LIST')
+		if len(self)!=3: raise SyntaxError('E_NO_LIST')
 		return self
 
 
@@ -190,17 +193,16 @@ def lex(src: Memelang) -> Iterator[Token]:
 
 def parse(src: Memelang) -> Iterator[Matrix]:
 	tokens = Stream(lex(src))
-	bound_vars = []
+	bindings = []
 	mtrx, vctr = Matrix(), Vector()
 
 	while tokens.peek():
 
 		# LIMIT: Single axis constraint
-		limit = Limit(Term(), Junc())
+		limit = Limit(Term(), Junc(), TOK_NOVAR)
 
 		# LEFT
 		if tokens.peek() == 'VAL': limit[LEFT].append(tokens.next())
-
 		if tokens.peek() in MOD_KINDS:
 			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
 			limit[LEFT].opr=tokens.next()
@@ -224,6 +226,14 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 			if tokens.peek() == 'SEP_OR': tokens.next()
 
 		if limit[RIGHT] and not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
+
+		# ASSN
+		if tokens.peek() == 'ASSN':
+			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
+			tokens.next()
+			if tokens.peek() != 'VAR': raise SyntaxError('E_ASSN_VAR')
+			limit[AVAR] = tokens.next()
+			bindings.append(limit[AVAR].lexeme)
 
 		# FINAL LIMIT
 		if limit[LEFT]:
@@ -279,6 +289,7 @@ class Meme(Node):
 			self[mtrx_idx].pad(Limit(
 					Term(Token('VAL',ELIDE)).check(),
 					Junc(Term(Token('VSAME',VSAME)).check()).check(),
+					TOK_NOVAR,
 					opr=Token('EQL',ELIDE)
 				).check())
 
@@ -492,7 +503,7 @@ class MemeSQLTable(Meme):
 					selectrows.append(f'{pricol} AS s{sel_idx}')
 					selectmemes.append(pricol)
 
-				if curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
+				if not curr['col'] or curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
 
 				col_name = curr['col'].datum
 				col_alias = f"{tbl_alias}.{col_name}"
@@ -514,6 +525,9 @@ class MemeSQLTable(Meme):
 				if where:
 					wheres.append(where)
 					whr_params.extend([p for p in param if p is not None])
+
+				for axis, aname in axis_name.items():
+					if vctr[axis][AVAR].kind == 'VAR': bindings[vctr[axis][AVAR].lexeme]=curr[aname]
 
 				prev = curr.copy()
 
