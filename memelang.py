@@ -2,10 +2,9 @@
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
 
-NEVER SPACES BETWEEN COMPARATOR AND VALUES
-
 1. MEMELANG USES AXES, HIGH -> LOW
 3=Table 2=Primary_Key 1=Column 0=Value
+NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES. SPACE MEANS "NEW AXIS"
 
 2. EXAMPLE QUERY
 MEMELANG: roles _ actor "Mark Hamill",Mark ; movie _ ; rating >4 ;;
@@ -14,13 +13,18 @@ SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie',
 
 3. EXAMPLE JOIN
 MEMELANG: roles _ actor "Mark Hamill" ; movie _ ; !@ @ @ ; actor _ ;;
-SQL COLS: SELECT t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie
+SQL COLS: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie
 SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', t1.id, 'movie', t1.movie, ';', 'actor', t1.actor, ';;' ) AS meme FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie
 
 4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
 MEMELANG: actors _ age >21; name _ ; roles _ title @ ;;
-SQL COLS: SELECT t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
+SQL COLS: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
 SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name
+
+5. EXAMPLE EMBEDDING
+MEMELANG: documents _ body <=>[0.1,0.2,0.3]>0.5 ; year _>2005 ;;
+SQL COLS: SELECT t0.id, t0.body<=>[0.1,0.2,0.3], t0.year from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
+SQL MEME: SELECT CONCAT_WS(' ', 'documents', t0.id, 'body', t0.body<=>[0.1,0.2,0.3], ';', 'year', t0.year, ';;') AS meme from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
 '''
 
 MEMELANG_VER = 9.06
@@ -30,6 +34,7 @@ from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
 
 Axis, Memelang = int, str
 
+ELIDE = ''
 SIGIL, VAL, MSAME, VSAME, EOF =  '$', '_', '^', '@', None
 SEP_LIMIT, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
@@ -41,7 +46,6 @@ TOKEN_KIND_PATTERNS = (
 	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EXOTIC CHARS "John \"Jack\" Kennedy"
 	('MTBL',		r'-*\|'),
 	('EMB',			r'\[(?:-?\d+(?:\.\d+)?)(?:,-?\d+(?:\.\d+)?)*\]'), # JSON ARRAY OF FLOATS [0.1,0.2]
-
 	('POW',			r'\*\*'),
 	('MUL',			r'\*'),
 	('ADD',			r'\+'),
@@ -51,16 +55,13 @@ TOKEN_KIND_PATTERNS = (
 	('L2',			r'<->'),
 	('COS',			r'<=>'),
 	('IP',			r'<#>'),
-	
 	('GE',			r'>='),
 	('LE',			r'<='),
 	('NOT',			r'!=?'),
 	('EQL',			r'='),
 	('GT',			r'>'),
 	('LT',			r'<'),
-	
-	('META',		r'`'),
-	
+	#('META',		r'`'),
 	('VAL',			re.escape(VAL)),		# VALCARD, MATCHES WHOLE VALUE, NEVER QUOTE
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX-1, VCTR=-1, LIMIT)
 	('VSAME',		re.escape(VSAME)),		# REFERENCES (MTRX,   VCTR-1,  LIMIT)
@@ -68,14 +69,11 @@ TOKEN_KIND_PATTERNS = (
 	('ALNUM',		r'[A-Za-z][A-Za-z0-9_]*'), # ALPHANUMERICS ARE UNQUOTED
 	('FLOAT',		r'-?\d*\.\d+'),
 	('INT',			r'-?\d+'),
-
 	('SUB',			r'\-'), # AFTER INT/FLOAT
-
 	('SEP_MTRX',	re.escape(SEP_MTRX)),
 	('SEP_VCTR',	re.escape(SEP_VCTR)),
 	('SEP_OR',		re.escape(SEP_OR)),
 	('SEP_LIMIT',	r'\s+'),
-
 	('MISMATCH',	r'.'),
 )
 
@@ -89,7 +87,7 @@ IGNORE_KINDS = {'COMMENT','MTBL'}
 EBNF = '''
 TERM ::= DATUM [MOD DATUM]
 JUNC ::= {TERM} {SEP_OR {TERM}}
-LIMIT ::= [JUNC] [CMP] [JUNC]
+LIMIT ::= [TERM] [CMP] [JUNC]
 VCTR ::= LIMIT {SEP_LIMIT LIMIT}
 MTRX ::= VCTR {SEP_VCTR VCTR}
 MEME ::= MTRX {SEP_MTRX MTRX}
@@ -113,7 +111,7 @@ class Token():
 	def __eq__(self, other): return isinstance(other, Token) and self.kind[0] == other.kind[0] and self.lexeme == other.lexeme
 
 
-TOK_EQL = Token('EQL', '') # ELIDED '='
+TOK_EQL = Token('EQL', ELIDE)
 TOK_NOT = Token('NOT', '!')
 TOK_GT = Token('GT', '>')
 TOK_SEP_LIMIT = Token('SEP_LIMIT', SEP_LIMIT)
@@ -122,7 +120,6 @@ TOK_SEP_MTRX = Token('SEP_MTRX', SEP_MTRX)
 TOK_SEP_OR = Token('SEP_OR', SEP_OR)
 
 TOK_SEP_TOK = Token('SEP_TOK', '')
-TOK_SEP_TERM = Token('SEP_TERM', '')
 TOK_SEP_PASS = Token('SEP_PASS', '')
 
 
@@ -214,47 +211,40 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 	tokens = Stream(lex(src))
 	bound_vars = []
 	mtrx, vctr = Matrix(), Vector()
-	LIMIT_KINDS = set(CMP_KINDS)|{'VAL'}|DATUM_KINDS
 
 	while tokens.peek():
 
 		# LIMIT: Single axis constraint
-		limit = Limit(Junc(), Junc())
-		side = None
+		limit = Limit(Term(), Junc())
 
-		while tokens.peek() in LIMIT_KINDS:
+		# LEFT
+		if tokens.peek() == 'VAL': limit[LEFT].append(tokens.next())
 
-			if tokens.peek() in CMP_KINDS:
-				if side == RIGHT: raise SyntaxError('E_CMP_EXTRA')
-				side, limit.opr = RIGHT, tokens.next()
-				if tokens.peek() == 'SEP_LIMIT': raise SyntaxError('E_CMP_SPACE'); # NEVER SPACES INSIDE AXIS BETWEEN COMPARATOR AND VALUES
+		if tokens.peek() in MOD_KINDS:
+			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
+			limit[LEFT].opr=tokens.next()
+			if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
+			limit[LEFT].append(tokens.next())
 
-			elif side is None:
-				if tokens.peek() == 'VAL': side = LEFT
-				else: side, limit.opr = RIGHT, TOK_EQL
+		# CMP
+		if tokens.peek() in CMP_KINDS:
+			limit.opr=tokens.next()
+			if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_TERM_DATUM')
 
-			while True:
-				term=Term()
-				
-				if side == LEFT:
-					if tokens.peek() in MOD_KINDS: term.append(Token('VAL',''))
-					elif tokens.peek() != 'VAL': raise SyntaxError('E_LEFT_DATUM')
+		# RIGHT
+		while tokens.peek() in DATUM_KINDS:
+			right_term = Term(tokens.next())
+			if tokens.peek() in MOD_KINDS:
+				right_term.opr=tokens.next()
+				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
+				right_term.append(tokens.next())
+			limit[RIGHT].append(right_term.check())
+			if tokens.peek() == 'SEP_OR': tokens.next()
 
-				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_TERM_DATUM')
-				term.append(tokens.next())
-				if tokens.peek() in MOD_KINDS:
-					term.opr=tokens.next()
-					if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
-					term.append(tokens.next())
+		if limit[RIGHT] and not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
 
-				limit[side].append(term.check())
-
-				if tokens.peek() == 'SEP_OR':
-					if side == LEFT: raise SyntaxError('E_LEFT_OR')
-					tokens.next()
-				else: break
-
-		if side is not None:
+		# FINAL LIMIT
+		if limit[LEFT]:
 			if len(mtrx)==0 and 'VSAME' in limit.kind: raise SyntaxError('E_VSAME_OOB')			
 			vctr.prepend(limit.check())
 			continue
@@ -305,9 +295,9 @@ class Meme(Node):
 					if not isinstance(limit, Limit): raise TypeError('E_TYPE_LIMIT')
 					# DO VAR BIND HERE
 			self[mtrx_idx].pad(Limit(
-					Junc(Term(Token('VAL','')).check()).check(),
+					Term(Token('VAL',ELIDE)).check(),
 					Junc(Term(Token('VSAME',VSAME)).check()).check(),
-					opr=Token('EQL','')
+					opr=Token('EQL',ELIDE)
 				).check())
 
 		self.results = [[[[] for limit in vctr] for vctr in mtrx] for mtrx in self]
