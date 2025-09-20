@@ -2,32 +2,13 @@
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
 
-1. MEMELANG USES AXES, HIGH -> LOW
-3=Table 2=Primary_Key 1=Column 0=Value
-NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES. SPACE MEANS "NEW AXIS"
-
-2. EXAMPLE QUERY
-MEMELANG: roles _ actor "Mark Hamill",Mark ; movie _ ; rating >4 ;;
-SQL COLS: SELECT actor, movie, rating FROM roles WHERE actor IN ('Mark Hamill', 'Mark') AND rating > 4
-SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', 'rating', t0.rating, ';;') AS meme FROM roles AS t0 WHERE t0.actor IN ('Mark Hamill', 'Mark') AND t0.rating > 4
-
-3. EXAMPLE JOIN
-MEMELANG: roles _ actor "Mark Hamill" ; movie _ ; !@ @ @ ; actor _ ;;
-SQL COLS: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie
-SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', t1.id, 'movie', t1.movie, ';', 'actor', t1.actor, ';;' ) AS meme FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie
-
-4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
-MEMELANG: actors _ age >21; name _ ; roles _ title @ ;;
-SQL COLS: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
-SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name
-
-5. EXAMPLE EMBEDDING
-MEMELANG: documents _ body <=>[0.1,0.2,0.3]>0.5 ; year _>2005 ;;
-SQL COLS: SELECT t0.id, t0.body<=>[0.1,0.2,0.3], t0.year from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
-SQL MEME: SELECT CONCAT_WS(' ', 'documents', t0.id, 'body', t0.body<=>[0.1,0.2,0.3], ';', 'year', t0.year, ';;') AS meme from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
+MEMELANG USES AXES
+AXES ORDERED HIGH TO LOW
+NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES
+SPACE MEANS "NEW AXIS"
 '''
 
-MEMELANG_VER = 9.06
+MEMELANG_VER = 9.07
 
 import random, re, json, operator
 from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
@@ -39,7 +20,6 @@ SIGIL, VAL, MSAME, VSAME, EOF =  '$', '_', '^', '@', None
 SEP_LIMIT, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
 LEFT, RIGHT = 0, 1
-
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
@@ -98,7 +78,8 @@ class Token():
 	lexeme: str
 	datum: Union[str, float, int, list]
 	def __init__(self, kind: str, lexeme: str):
-		self.kind = [kind]
+		self.kind = kind
+		self.kinds = [kind]
 		self.lexeme = lexeme
 		if kind == 'QUOT': 		self.datum = json.loads(lexeme)
 		elif kind == 'EMB': 	self.datum = json.loads(lexeme)
@@ -108,7 +89,7 @@ class Token():
 
 	def dump(self) -> Union[str, float, int, list]: return self.datum
 	def __str__(self) -> Memelang: return self.lexeme
-	def __eq__(self, other): return isinstance(other, Token) and self.kind[0] == other.kind[0] and self.lexeme == other.lexeme
+	def __eq__(self, other): return isinstance(other, Token) and self.kind == other.kind and self.lexeme == other.lexeme
 
 
 TOK_EQL = Token('EQL', ELIDE)
@@ -133,7 +114,7 @@ class Stream:
 			val = next(self.token, EOF)
 			if val is EOF: return EOF
 			self.buffer.append(val)
-		return self.buffer[fwd-1].kind[0]
+		return self.buffer[fwd-1].kind
 		
 	def next(self) -> Token: 
 		if not self.buffer:
@@ -166,10 +147,10 @@ class Node(list):
 	def __str__(self) -> Memelang: return self.opr.lexeme.join(map(str, self))
 
 	@property
-	def kind(self) -> list[str]:
-		kind=[]
-		for n in self: kind.extend(n.kind)
-		return kind
+	def kinds(self) -> list[str]:
+		kinds=[]
+		for n in self: kinds.extend(n.kinds)
+		return kinds
 
 
 # 1+2
@@ -233,6 +214,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 		# RIGHT
 		while tokens.peek() in DATUM_KINDS:
+			if limit.opr.kind == 'SEP_PASS': limit.opr=Token('EQL', ELIDE)
 			right_term = Term(tokens.next())
 			if tokens.peek() in MOD_KINDS:
 				right_term.opr=tokens.next()
@@ -245,7 +227,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 		# FINAL LIMIT
 		if limit[LEFT]:
-			if len(mtrx)==0 and 'VSAME' in limit.kind: raise SyntaxError('E_VSAME_OOB')			
+			if len(mtrx)==0 and 'VSAME' in limit.kinds: raise SyntaxError('E_VSAME_OOB')			
 			vctr.prepend(limit.check())
 			continue
 
@@ -363,3 +345,185 @@ class Fuzz():
 	@staticmethod
 	def mtrx_table(col_len:int = 5) -> Memelang:
 		return Fuzz.datum('ALNUM') + SEP_LIMIT + VAL + SEP_LIMIT + SEP_VCTR_PRETTY.join(Fuzz.datum('ALNUM') + SEP_LIMIT + Fuzz.limit() for _ in range(col_len)) + SEP_MTRX_PRETTY
+
+
+
+### SQL ### 
+
+'''
+1. EXAMPLE QUERY
+MEMELANG: roles _ actor "Mark Hamill",Mark ; movie _ ; rating >4 ;;
+SQL COLS: SELECT actor, movie, rating FROM roles WHERE actor IN ('Mark Hamill', 'Mark') AND rating > 4;
+SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', 'rating', t0.rating, ';;') AS meme FROM roles AS t0 WHERE t0.actor IN ('Mark Hamill', 'Mark') AND t0.rating > 4;
+
+2. EXAMPLE JOIN
+MEMELANG: roles _ actor "Mark Hamill" ; movie _ ; !@ @ @ ; actor _ ;;
+SQL COLS: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie;
+SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', t1.id, 'movie', t1.movie, ';', 'actor', t1.actor, ';;' ) AS meme FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie;
+
+3. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
+MEMELANG: actors _ age >21; name _ ; roles _ title @ ;;
+SQL COLS: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
+SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
+
+4. EXAMPLE EMBEDDING
+MEMELANG: documents _ body <=>[0.1,0.2,0.3]>0.5 ; year >2005 ;;
+SQL COLS: SELECT t0.id, t0.body<=>[0.1,0.2,0.3], t0.year from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
+SQL MEME: SELECT CONCAT_WS(' ', 'documents', t0.id, 'body', t0.body<=>[0.1,0.2,0.3], ';', 'year', t0.year, ';;') AS meme from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
+'''
+
+SQL = str
+Param = int|float|str|list
+
+class SQLUtil():
+	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<='}
+	@staticmethod
+	def escape(token: Token, bindings: dict) -> SQL:
+		if token.kind == 'DBCOL': return token.datum
+		elif token.kind == 'VAL': return SQLUtil.escape(bindings[VAL], bindings)
+		elif token.kind == 'VSAME': return SQLUtil.escape(bindings[VSAME], bindings)
+		elif token.kind == 'VAR':
+			if token.lexeme not in bindings: raise SyntaxError('E_VAR_BIND')
+			return SQLUtil.escape(bindings[token.lexeme], bindings)
+		return '%s'
+
+	@staticmethod
+	def escape2(token: Token, bindings: dict) -> None|Param:
+		if token.kind == 'DBCOL': return None
+		elif token.kind == 'VAL': return SQLUtil.escape2(bindings[VAL], bindings)
+		elif token.kind == 'VSAME': return SQLUtil.escape2(bindings[VSAME], bindings)
+		elif token.kind == 'VAR':
+			if token.lexeme not in bindings: raise SyntaxError('E_VAR_BIND')
+			return SQLUtil.escape2(bindings[token.lexeme], bindings)
+		return token.datum
+
+	@staticmethod
+	def select(term: Term, bindings: dict) -> Tuple[SQL, List[None|Param]]:
+		sqlselect = SQLUtil.escape(term[0], bindings)
+		sqlparams = [SQLUtil.escape2(term[0], bindings)]
+		if term.opr.kind!='SEP_TOK':
+			sqlselect += term.opr.lexeme + SQLUtil.escape(term[1], bindings)
+			sqlparams.append(SQLUtil.escape2(term[1], bindings))
+
+		return sqlselect, sqlparams
+
+	@staticmethod
+	def where(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param]]:
+		if limit.opr.kind == 'SEP_PASS': return '', []
+		sym = SQLUtil.cmp2sql[limit.opr.kind]
+		lp, rp = '', ''
+
+		if len(limit[RIGHT]) > 1:
+			lp, rp = '(', ')'
+			if limit.opr.kind == 'EQL': sym = 'IN'
+			elif limit.opr.kind == 'NOT': sym = 'NOT IN'
+			else: raise SyntaxError()
+
+		leftsql, params = SQLUtil.select(limit[LEFT], bindings)
+		rights = []
+		for right in limit[RIGHT]:
+			sql, subparams = SQLUtil.select(right, bindings)
+			rights.append(sql)
+			params.extend(subparams)
+
+		return f'{leftsql} {sym} {lp}'+ ', '.join(rights) + rp, params
+
+	@staticmethod
+	def deref(limit: Limit, bindings: dict) -> Tuple[bool, None|Token]:
+		if limit.opr.kind != 'EQL': return False, None
+		if len(limit[LEFT])>1: return False, None
+		if len(limit[RIGHT])>1: return False, None
+		if len(limit[RIGHT][0])>1: return False, None
+		if limit[RIGHT][0][0].kind == 'VSAME' and bindings[VSAME]: return True, bindings[VSAME]
+		return limit[RIGHT][0][0] == bindings[VSAME], limit[RIGHT][0][0]
+
+
+class MemeSQLTable(Meme):
+	output = 'meme'
+	primary: str = 'id'
+
+	def select(self) -> Tuple[SQL, List[Param]]:
+		cte_idx: int = 0
+		tbl_idx: int = 0
+		sel_idx: int = 0
+		sqlsels: Dict[int, SQL] = {}
+		params: List[Param] = []
+		axis_name: Dict[Axis, str] = {}
+		name_axis: Dict[str, Axis] = {}
+		
+		for mtrx in self:
+			cte_idx+=1
+			froms, wheres, selectrows, orders, selectmemes, sel_params, whr_params, bindings = [], [], [], [], [], [], [], {}
+			tbl_alias = None
+			prev = {'val': None,'col': None, 'row': None, 'tbl': None}
+
+			for vctr in mtrx:
+
+				if not axis_name: # TO DO: MAKE THIS CHANGEABLE PER VCTR
+					axis_name = {0: 'val', 1: 'col', 2: 'row', 3: 'tbl'}
+					name_axis = {v: k for k, v in axis_name.items()}
+
+				curr = {'val': None,'col': None, 'row': None, 'tbl': None}
+				same = {'val': None,'col': None, 'row': None, 'tbl': None}
+				
+				for aname in ('col','row','tbl'):
+					same[aname], curr[aname] = SQLUtil.deref(vctr[name_axis[aname]], {VSAME: prev[aname]})
+
+				# JOIN
+				if not same['tbl'] or not same['row']:
+
+					# TABLE ALIAS
+					if not curr['tbl'] or curr['tbl'].kind != 'ALNUM': raise SyntaxError('E_TBL_ALNUM')
+					tbl_alias = f't{tbl_idx}'
+					froms.append(f"{curr['tbl']} AS {tbl_alias}")
+					tbl_idx += 1
+					pricol = f"{tbl_alias}.{self.primary}"
+					selectmemes.append(f"'{curr['tbl'].lexeme}'")
+
+					# PRIMARY KEY
+					bindings[VSAME]=prev['row'] if prev['row'] is not None else None
+					curr['row']=bindings[VAL]=Token('DBCOL', pricol)
+					where, param = SQLUtil.where(vctr[name_axis['row']], bindings)
+					if where:
+						wheres.append(where)
+						whr_params.extend([p for p in param if p is not None])
+
+					sel_idx+=1
+					selectrows.append(f'{pricol} AS s{sel_idx}')
+					selectmemes.append(pricol)
+
+				if curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
+
+				col_name = curr['col'].datum
+				col_alias = f"{tbl_alias}.{col_name}"
+				sel_idx += 1
+				sel_alias = f's{sel_idx}'
+
+				if prev['val']: bindings[VSAME]=prev['val']
+				curr['val']=bindings[VAL]=Token('DBCOL', col_alias)
+
+				# SELECT
+				select, param = SQLUtil.select(vctr[name_axis['val']][0], bindings)
+				if select:
+					selectrows.append(f'{select} AS {sel_alias}')
+					selectmemes.extend([f"'{col_name}'", select, f"'{SEP_VCTR}'"])
+					sel_params.extend([p for p in param if p is not None])
+
+				# WHERE
+				where, param = SQLUtil.where(vctr[name_axis['val']], bindings)
+				if where:
+					wheres.append(where)
+					whr_params.extend([p for p in param if p is not None])
+
+				prev = curr.copy()
+
+			params.extend(sel_params+whr_params)
+			selectmemes.append(f"'{SEP_MTRX}'")
+
+			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join(wheres)
+			orderstr = '' if not orders else ' ORDER BY ' + ', '.join(orders)	
+
+			if self.output=='meme': sqlsels[cte_idx] = f'SELECT CONCAT_WS(\'{SEP_LIMIT}\', ' + ', '.join(selectmemes) + f') AS meme FROM ' + ', '.join(froms) + wherestr + orderstr
+			else: sqlsels[cte_idx] = 'SELECT ' + ', '.join(selectrows) + ' FROM ' + ', '.join(froms) + wherestr + orderstr
+
+		return ' UNION ALL '.join(sqlsels[k] for k in sqlsels) +';', params
