@@ -4,14 +4,16 @@ This script is optimized for prompting LLMs
 
 MEMELANG USES AXES
 AXES ORDERED HIGH TO LOW
+NEVER SPACES BEFORE OPERATOR
 NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES
+NEVER SPACES BEFORE ASSN VAR
 SPACE MEANS "NEW AXIS"
 '''
 
-MEMELANG_VER = 9.08
+MEMELANG_VER = 9.09
 
-import random, re, json, operator
-from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
+import random, re, json
+from typing import List, Iterator, Iterable, Dict, Tuple, Union
 
 Axis, Memelang = int, str
 
@@ -30,8 +32,9 @@ TOKEN_KIND_PATTERNS = (
 	('MUL',			r'\*'),
 	('ADD',			r'\+'),
 	('DIV',			r'\/'),
+	('SMLR',		r'\%\%'),
 	('MOD',			r'\%'),
-	('TSQ',			r'@@'),
+	#('TSQ',			r'@@'),
 	('L2',			r'<->'),
 	('COS',			r'<=>'),
 	('IP',			r'<#>'),
@@ -60,8 +63,8 @@ TOKEN_KIND_PATTERNS = (
 
 MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN_KIND_PATTERNS))
 
-CMP_KINDS = {'EQL':{'STR','NUM','DATA'},'NOT':{'STR','NUM','DATA'},'GT':{'NUM'},'GE':{'NUM'},'LT':{'NUM'},'LE':{'NUM'}}
-MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'EMB'},'IP':{'EMB'},'COS':{'EMB'},'TSQ':{'TSQ'}}
+CMP_KINDS = {'EQL':{'STR','NUM','DATA'},'NOT':{'STR','NUM','DATA'},'GT':{'NUM'},'GE':{'NUM'},'LT':{'NUM'},'LE':{'NUM'},'SMLR':{'STR'}}
+MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'EMB'},'IP':{'EMB'},'COS':{'EMB'}} #,'TSQ':{'TSQ'}
 DATUM_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','EMB'}
 IGNORE_KINDS = {'COMMENT','MTBL'}
 
@@ -96,7 +99,6 @@ class Token():
 
 TOK_EQL = Token('EQL', ELIDE)
 TOK_NOT = Token('NOT', '!')
-TOK_GT = Token('GT', '>')
 TOK_SEP_LIMIT = Token('SEP_LIMIT', SEP_LIMIT)
 TOK_SEP_VCTR = Token('SEP_VCTR', SEP_VCTR)
 TOK_SEP_MTRX = Token('SEP_MTRX', SEP_MTRX)
@@ -141,7 +143,7 @@ class Node(list):
 		for idx, item in enumerate(self):
 			diff = max_len - len(item)
 			if diff>0: self[idx] += [padding] * diff
-			elif diff<0: raise SyntaxError('E_PAD') # FIRST MUST BE LONGEST
+			elif diff<0: raise SyntaxError('E_FIRST_VECTOR_MUST_BE_LONGEST')
 
 	def dump(self) -> List: return [self.opr.dump(), [item.dump() for item in self]]
 	def check(self) -> 'Node': 
@@ -207,8 +209,10 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
 			limit[LEFT].opr=tokens.next()
 			if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
-			limit[LEFT].append(tokens.next())
-
+			datum = tokens.next()
+			if datum.kind == 'VAR' and datum.lexeme not in bindings: raise SyntaxError('E_VAR_BIND')
+			limit[LEFT].append(datum)
+			
 		# CMP
 		if tokens.peek() in CMP_KINDS:
 			limit.opr=tokens.next()
@@ -221,9 +225,13 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 			if tokens.peek() in MOD_KINDS:
 				right_term.opr=tokens.next()
 				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
-				right_term.append(tokens.next())
+				datum = tokens.next()
+				if datum.kind == 'VAR' and datum.lexeme not in bindings: raise SyntaxError('E_VAR_BIND')
+				right_term.append(datum)
 			limit[RIGHT].append(right_term.check())
-			if tokens.peek() == 'SEP_OR': tokens.next()
+			if tokens.peek() == 'SEP_OR':
+				tokens.next()
+				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_OR_TRAIL')
 
 		if limit[RIGHT] and not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
 
@@ -269,12 +277,10 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 class Meme(Node):
 	opr: Token = TOK_SEP_MTRX
 	results: List[List[List[Junc]]]
-	bindings: Dict[str, Tuple[Axis, Axis, Axis]]
 	src: Memelang
 
 	def __init__(self, src: Memelang):
 		self.src = src
-		self.bindings = {}
 		super().__init__(*parse(src))
 		self.check()
 
@@ -318,7 +324,7 @@ class Fuzz():
 		comp = random.choice(['=','!=','>','<','<=','>='])
 
 		# EMBEDDING
-		if comp in {'<','<='} and random.randint(0, 2):
+		if comp in {'<','<=','>','>='} and random.randint(0, 2):
 			data += VAL + '<=>' + Fuzz.datum('EMB') 
 			if random.randint(0, 1): data += comp + Fuzz.datum('PROB')
 
@@ -332,7 +338,7 @@ class Fuzz():
 			# RIGHT
 			if comp in {'=','!=','!'}:
 				data_list_len = random.randint(1, 5)
-				data_list: List[Any] = []
+				data_list: List[Memelang] = []
 				for _ in range(data_list_len):
 					datum_type = random.randint(1, 7)
 					if datum_type == 1:  data_list.append(Fuzz.datum('QUOT'))
@@ -374,6 +380,8 @@ SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie',
 
 3. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
 MEMELANG: actors _ age >21; name _ ; roles _ title @ ;;
+MEMELANG(2): actors _ age >21; name _:$n ; roles _ title $n ;;
+MEMELANG(3): actors _ age >21; name :$x ; roles _ title $x ;;
 SQL COLS: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
 SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
 
@@ -387,7 +395,7 @@ SQL = str
 Param = int|float|str|list
 
 class SQLUtil():
-	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<='}
+	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
 	@staticmethod
 	def escape(token: Token, bindings: dict) -> SQL:
 		if token.kind == 'DBCOL': return token.datum
@@ -428,12 +436,16 @@ class SQLUtil():
 			lp, rp = '(', ')'
 			if limit.opr.kind == 'EQL': sym = 'IN'
 			elif limit.opr.kind == 'NOT': sym = 'NOT IN'
-			else: raise SyntaxError()
+			else: raise SyntaxError('E_JUNC_COMP')
 
 		leftsql, params = SQLUtil.select(limit[LEFT], bindings)
 		rights = []
 		for right in limit[RIGHT]:
 			sql, subparams = SQLUtil.select(right, bindings)
+
+			if sym in ('LIKE','ILIKE'):
+				sql = sql.replace('%s', "CONCAT('%', %s, '%')")
+
 			rights.append(sql)
 			params.extend(subparams)
 
@@ -442,11 +454,9 @@ class SQLUtil():
 	@staticmethod
 	def deref(limit: Limit, bindings: dict) -> Tuple[bool, None|Token]:
 		if limit.opr.kind != 'EQL': return False, None
-		if len(limit[LEFT])>1: return False, None
-		if len(limit[RIGHT])>1: return False, None
-		if len(limit[RIGHT][0])>1: return False, None
-		if limit[RIGHT][0][0].kind == 'VSAME' and bindings[VSAME]: return True, bindings[VSAME]
-		return limit[RIGHT][0][0] == bindings[VSAME], limit[RIGHT][0][0]
+		if len(limit[LEFT])>1 or len(limit[RIGHT])>1 or len(limit[RIGHT][0])>1: return False, None
+		if limit[RIGHT][0][0].kind == 'VSAME': return True, bindings.get(VSAME)
+		return limit[RIGHT][0][0] == bindings.get(VSAME), limit[RIGHT][0][0]
 
 
 class MemeSQLTable(Meme):
@@ -456,7 +466,6 @@ class MemeSQLTable(Meme):
 	def select(self) -> Tuple[SQL, List[Param]]:
 		cte_idx: int = 0
 		tbl_idx: int = 0
-		sel_idx: int = 0
 		sqlsels: Dict[int, SQL] = {}
 		params: List[Param] = []
 		axis_name: Dict[Axis, str] = {}
@@ -464,7 +473,7 @@ class MemeSQLTable(Meme):
 		
 		for mtrx in self:
 			cte_idx+=1
-			froms, wheres, selectrows, orders, selectmemes, sel_params, whr_params, bindings = [], [], [], [], [], [], [], {}
+			froms, wheres, selectrows, selectmemes, sel_params, orders, whr_params, bindings = [], [], [], [], [], [], [], {}
 			tbl_alias = None
 			prev = {'val': None,'col': None, 'row': None, 'tbl': None}
 
@@ -499,16 +508,13 @@ class MemeSQLTable(Meme):
 						wheres.append(where)
 						whr_params.extend([p for p in param if p is not None])
 
-					sel_idx+=1
-					selectrows.append(f'{pricol} AS s{sel_idx}')
+					selectrows.append(f'{pricol}')
 					selectmemes.append(pricol)
 
 				if not curr['col'] or curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
 
 				col_name = curr['col'].datum
 				col_alias = f"{tbl_alias}.{col_name}"
-				sel_idx += 1
-				sel_alias = f's{sel_idx}'
 
 				if prev['val']: bindings[VSAME]=prev['val']
 				curr['val']=bindings[VAL]=Token('DBCOL', col_alias)
@@ -516,7 +522,7 @@ class MemeSQLTable(Meme):
 				# SELECT
 				select, param = SQLUtil.select(vctr[name_axis['val']][0], bindings)
 				if select:
-					selectrows.append(f'{select} AS {sel_alias}')
+					selectrows.append(f'{select}')
 					selectmemes.extend([f"'{col_name}'", select, f"'{SEP_VCTR}'"])
 					sel_params.extend([p for p in param if p is not None])
 
