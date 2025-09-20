@@ -10,7 +10,7 @@ NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES
 NEVER SPACES BEFORE ASSN VAR
 '''
 
-MEMELANG_VER = 9.10
+MEMELANG_VER = 9.11
 
 import random, re, json
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -33,7 +33,7 @@ TOKEN_KIND_PATTERNS = (
 	('ADD',			r'\+'),
 	('DIV',			r'\/'),
 	('MOD',			r'\%'),
-	#('TSQ',			r'@@'),
+	#('TSQ',		r'@@'),
 	('L2',			r'<->'),
 	('COS',			r'<=>'),
 	('IP',			r'<#>'),
@@ -106,6 +106,7 @@ TOK_SEP_OR = Token('SEP_OR', SEP_OR)
 
 TOK_SEP_TOK = Token('SEP_TOK', '')
 TOK_SEP_PASS = Token('SEP_PASS', '')
+TOK_SEP_SUM = Token('SEP_SUM', '')
 TOK_NOVAR = Token('NOVAR', '')
 
 
@@ -276,7 +277,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 class Meme(Node):
 	opr: Token = TOK_SEP_MTRX
-	results: List[List[List[Junc]]]
+	results: List[List[List[List[]]]]
 	src: Memelang
 
 	def __init__(self, src: Memelang):
@@ -393,6 +394,7 @@ SQL MEME: SELECT CONCAT_WS(' ', 'documents', t0.id, 'body', t0.body<=>[0.1,0.2,0
 
 SQL = str
 Param = int|float|str|list
+Agg = bool
 
 class SQLUtil():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
@@ -417,18 +419,28 @@ class SQLUtil():
 		return token.datum
 
 	@staticmethod
-	def select(term: Term, bindings: dict) -> Tuple[SQL, List[None|Param]]:
-		sqlselect = SQLUtil.escape(term[0], bindings)
+	def term(term: Term, bindings: dict) -> Tuple[SQL, List[None|Param]]:
+		sqlterm = SQLUtil.escape(term[0], bindings)
 		sqlparams = [SQLUtil.escape2(term[0], bindings)]
 		if term.opr.kind!='SEP_TOK':
-			sqlselect += term.opr.lexeme + SQLUtil.escape(term[1], bindings)
+			sqlterm += term.opr.lexeme + SQLUtil.escape(term[1], bindings)
 			sqlparams.append(SQLUtil.escape2(term[1], bindings))
 
-		return sqlselect, sqlparams
+		return sqlterm, sqlparams
 
 	@staticmethod
-	def where(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param]]:
-		if limit.opr.kind == 'SEP_PASS': return '', []
+	def select(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
+		agg = False
+		agg_func = {'$sum': 'SUM', '$avg': 'AVG', '$min': 'MIN', '$max': 'MAX'}
+		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
+		if limit[AVAR].lexeme in agg_func:
+			sqlterm = agg_func[limit[AVAR].lexeme] + '(' + sqlterm + ')'
+			agg = True
+		return sqlterm, sqlparams, agg
+		
+	@staticmethod
+	def where(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
+		if limit.opr.kind == 'SEP_PASS': return '', [], False
 		sym = SQLUtil.cmp2sql[limit.opr.kind]
 		lp, rp, junc = '', '', ''
 
@@ -436,10 +448,10 @@ class SQLUtil():
 			lp, rp = '(', ')'
 			junc = 'AND' if limit.opr.kind == 'NOT' else 'OR'
 
-		leftsql, params = SQLUtil.select(limit[LEFT], bindings)
+		leftsql, params, agg = SQLUtil.select(limit, bindings)
 		rights = []
 		for right in limit[RIGHT]:
-			sql, subparams = SQLUtil.select(right, bindings)
+			sql, subparams = SQLUtil.term(right, bindings)
 
 			if sym in ('LIKE','ILIKE'):
 				sql = sql.replace('%s', "CONCAT('%', %s, '%')")
@@ -447,7 +459,7 @@ class SQLUtil():
 			rights.append(f"{leftsql} {sym} {sql}")
 			params.extend(subparams)
 
-		return lp + f' {junc} '.join(rights) + rp, params
+		return lp + f' {junc} '.join(rights) + rp, params, agg
 
 	@staticmethod
 	def deref(limit: Limit, bindings: dict) -> Tuple[bool, None|Token]:
@@ -458,24 +470,22 @@ class SQLUtil():
 
 
 class MemeSQLTable(Meme):
-	primary: str = 'id'
-
-	def select(self) -> Tuple[SQL, List[Param]]:
+	def select(self) -> List[Tuple[SQL, List[Param]]]:
 		tbl_idx: int = 0
-		sqls: list[SQL] = []
-		params: List[Param] = []
+		sqls: list[Tuple[SQL, List[Param]]] = []
 		axis_name: Dict[Axis, str] = {}
 		name_axis: Dict[str, Axis] = {}
 		
 		for mtrx in self:
 			selectall = False
-			froms, wheres, selects, sel_params, orders, whr_params, bindings = [], [], [], [], [], [], {}
 			tbl_alias = None
+			froms, wheres, selects, orders, groupbys, havings, bindings = [], [], [], [], [], [], {}
 			prev = {'val': None,'col': None, 'row': None, 'tbl': None}
 
 			for vctr in mtrx:
 
 				if not axis_name: # TO DO: MAKE THIS CHANGEABLE PER VCTR
+					primary = 'id'
 					axis_name = {0: 'val', 1: 'col', 2: 'row', 3: 'tbl'}
 					name_axis = {v: k for k, v in axis_name.items()}
 
@@ -488,7 +498,7 @@ class MemeSQLTable(Meme):
 				# JOIN
 				if not same['tbl'] or not same['row']:
 
-					if selectall: selects.append(f'{tbl_alias}.*')
+					if selectall: selects.append((f'{tbl_alias}.*', [], False))
 					selectall = False
 
 					# TABLE ALIAS
@@ -496,18 +506,15 @@ class MemeSQLTable(Meme):
 					tbl_alias = f't{tbl_idx}'
 					froms.append(f"{curr['tbl']} AS {tbl_alias}")
 					tbl_idx += 1
-					pricol = f"{tbl_alias}.{self.primary}"
+					pricol = f"{tbl_alias}.{primary}"
 
 					# PRIMARY KEY
 					bindings[VSAME]=prev['row'] if prev['row'] is not None else None
 					curr['row']=bindings[VAL]=Token('DBCOL', pricol)
-					where, param = SQLUtil.where(vctr[name_axis['row']], bindings)
-					if where:
-						wheres.append(where)
-						whr_params.extend([p for p in param if p is not None])
+					where, param, _ = SQLUtil.where(vctr[name_axis['row']], bindings)
+					if where: wheres.append((where, param, False))
 
-					selects.extend([f"'{curr['tbl'].lexeme}' AS _a3", f"{pricol} AS _a2"])
-
+					selects.extend([(f"'{curr['tbl'].lexeme}' AS _a3", [], True), (f"{pricol} AS _a2", [], False)])
 
 				left = vctr[name_axis['val']][0]
 
@@ -523,30 +530,37 @@ class MemeSQLTable(Meme):
 				if prev['val']: bindings[VSAME]=prev['val']
 				curr['val']=bindings[VAL]=Token('DBCOL', col_alias)
 
-				# SELECT
-				select, param = SQLUtil.select(left, bindings)
-				if select:
-					selects.append(select)
-					sel_params.extend([p for p in param if p is not None])
-
-				# WHERE
-				where, param = SQLUtil.where(vctr[name_axis['val']], bindings)
-				if where:
-					wheres.append(where)
-					whr_params.extend([p for p in param if p is not None])
+				selects.append(SQLUtil.select(vctr[name_axis['val']], bindings))
+				where = SQLUtil.where(vctr[name_axis['val']], bindings)
+				if where[0]:
+					if where[2]: havings.append(where)
+					else: wheres.append(where)
 
 				for axis, aname in axis_name.items():
-					if vctr[axis][AVAR].kind == 'VAR': bindings[vctr[axis][AVAR].lexeme]=curr[aname]
+					if vctr[axis][AVAR].kind == 'VAR':
+						if aname == 'val':
+							if vctr[axis][AVAR].lexeme == '$gb':
+								groupbys.append(selects[-1])
+								selects[-1]=(selects[-1][0], selects[-1][1], True)
+								continue
+						bindings[vctr[axis][AVAR].lexeme]=curr[aname]
 
 				prev = curr.copy()
 
-			params.extend(sel_params+whr_params)
-			if selectall: selects.append(f'{tbl_alias}.*')
-			selects.append(f"'{SEP_MTRX}' as _sm")
+			if groupbys: 
+				if selectall: raise SyntaxError('E_SLCTALL_GRPBY')
+				selects = [s for s in selects if s[2]]
+			elif selectall: selects.append((f'{tbl_alias}.*', [], False))
+			selects.append((f"'{SEP_MTRX}' as _sm", [], True))
 
-			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join(wheres)
-			orderstr = '' if not orders else ' ORDER BY ' + ', '.join(orders)	
+			selectstr = 'SELECT ' + ', '.join([s[0] for s in selects if s[0]])
+			fromstr = ' FROM ' + ', '.join(froms)
+			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join([s[0] for s in wheres if s[0]])
+			groupbystr = '' if not groupbys else ' GROUP BY ' + ', '.join([s[0] for s in groupbys if s[0]])
+			havingstr = '' if not havings else ' HAVING ' + ' AND '.join([s[0] for s in havings if s[0]])
+			orderstr = '' if not orders else ' ORDER BY ' + ', '.join([s[0] for s in orders if s[0]])
+			params = [p for s in selects+wheres+groupbys+havings for p in s[1] if p is not None]
 
-			sqls.append('SELECT ' + ', '.join(selects) + ' FROM ' + ', '.join(froms) + wherestr + orderstr)
+			sqls.append((selectstr + fromstr + wherestr + groupbystr + havingstr + orderstr, params))
 
-		return ' UNION ALL '.join(s for s in sqls) +';', params
+		return sqls
