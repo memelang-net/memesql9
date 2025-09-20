@@ -3,7 +3,7 @@ info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for LLM prompting
 '''
 
-MEMELANG_VER = 9.01
+MEMELANG_VER = 9.02
 
 import random, re, json, operator
 from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
@@ -11,9 +11,9 @@ from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
 Axis, Memelang = int, str
 
 SIGIL, WILD, MSAME, VSAME, EOF =  '$', '_', '^', '@', None
-SEP_COMP, SEP_DATA, SEP_VCTR, SEP_MTRX = ' ', ',', ';', ';;'
+SEP_LIMIT, SEP_VCTR, SEP_MTRX = ' ', ';', ';;'
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
-ELIDE_COMP = ['VALUE', 'VSAME']
+ELIDE_LIMIT = ['PRIOR', 'VSAME']
 LEFT, RIGHT = 0, 1
 
 
@@ -23,8 +23,7 @@ TOKEN_KIND_PATTERNS = (
 	('MDTBL',		r'-*\|'),
 	('SEP_MTRX',	re.escape(SEP_MTRX)),
 	('SEP_VCTR',	re.escape(SEP_VCTR)),
-	('SEP_COMP',	r'\s+'),
-	('SEP_DATA',	re.escape(SEP_DATA)),
+	('SEP_LIMIT',	r'\s+'),
 
 	('POW',			r'\*\*'),
 	('MUL',			r'\*'),
@@ -46,8 +45,8 @@ TOKEN_KIND_PATTERNS = (
 	('META',		r'`'),
 	
 	('WILD',		re.escape(WILD)),		# WILDCARD, MATCHES WHOLE VALUE, NEVER QUOTE
-	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX_AXIS-1, VCTR_AXIS=-1, COMP_AXIS)
-	('VSAME',		re.escape(VSAME)),		# REFERENCES (MTRX_AXIS,   VCTR_AXIS-1,  COMP_AXIS)
+	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX_AXIS-1, VCTR_AXIS=-1, LIMIT_AXIS)
+	('VSAME',		re.escape(VSAME)),		# REFERENCES (MTRX_AXIS,   VCTR_AXIS-1,  LIMIT_AXIS)
 	('VAR',			r'\$[A-Za-z0-9]+'),
 	('ALNUM',		r'[A-Za-z_][A-Za-z0-9_]*'), # ALPHANUMERICS ARE UNQUOTED
 	('FLOAT',		r'-?\d*\.\d+'),
@@ -66,17 +65,17 @@ DATUM_KINDS = {'ALNUM','QUOTE','INT','FLOAT','VAR','VSAME','MSAME','WILD'}
 IGNORE_KINDS = {'COMMENT','MDTBL'}
 
 EBNF = '''
-PAIR ::= [MOD] DATUM
-EXPR ::= PAIR {PAIR}
-DATA ::= EXPR {SEP_DATA EXPR}
-COMP ::= [DATA] [CMP] [DATA]
-VCTR ::= COMP {SEP_COMP COMP}
+TERM ::= [MOD] DATUM
+EXPR ::= TERM {TERM}
+COMP ::= [CMP] EXPR
+LIMIT ::= COMP COMP {COMP}
+VCTR ::= LIMIT {SEP_LIMIT LIMIT}
 MTRX ::= VCTR {SEP_VCTR VCTR}
 MEME ::= MTRX {SEP_MTRX MTRX}
 '''
 
 class Token():
-	kind: str
+	kind: list[str]
 	lexeme: str
 	datum: Union[str, float, int, list]
 	def __init__(self, kind: str, lexeme: str):
@@ -87,8 +86,7 @@ class Token():
 		elif kind == 'INT':		self.datum = int(lexeme)
 		else: 					self.datum = lexeme
 
-	@property
-	def dump(self) -> str|float|int: return self.datum
+	def dump(self) -> Union[str, float, int, list]: return self.datum
 	def __str__(self) -> Memelang: return self.lexeme
 	def __eq__(self, other): return isinstance(other, Token) and self.kind[0] == other.kind[0] and self.lexeme == other.lexeme
 
@@ -97,10 +95,13 @@ TOK_EQL = Token('EQL', '') # ELIDED '='
 TOK_NOT = Token('NOT', '!')
 TOK_GT = Token('GT', '>')
 TOK_SEP_NONE = Token('SEP_NONE', '') # ELIDED
-TOK_SEP_DATA = Token('SEP_DATA', SEP_DATA)
-TOK_SEP_COMP = Token('SEP_COMP', SEP_COMP)
+TOK_SEP_LIMIT = Token('SEP_LIMIT', SEP_LIMIT)
 TOK_SEP_VCTR = Token('SEP_VCTR', SEP_VCTR)
 TOK_SEP_MTRX = Token('SEP_MTRX', SEP_MTRX)
+
+TOK_SEP_TERM = Token('SEP_TERM', '')
+TOK_SEP_OR = Token('SEP_OR', '')
+TOK_SEP_TRUE = Token('SEP_TRUE', '')
 
 
 class Stream:
@@ -151,33 +152,42 @@ class Node(list):
 		for n in self: kind.extend(n.kind)
 		return kind
 
-
-class Pair(Node):
+# +5
+class Term(Node):
 	opr: Token = TOK_EQL
-	def check(self) -> 'Pair':
+	def check(self) -> 'Term':
 		if len(self)!=1: raise SyntaxError('E_NO_LIST')
-		self.insert(0, Token('VALUE', ''))
+		self.insert(0, Token('PRIOR', ''))
 		return self
 
 
-class Expr(Node):
-	opr: Token = TOK_SEP_NONE
+# +5+6/7
+class Sqnc(Node):
+	opr: Token = TOK_SEP_TERM
 
 
-class Data(Node):
-	opr: Token = TOK_SEP_NONE
-
-
-class Comp(Node):
+# >+5+6/7
+class Pred(Node):
 	opr: Token = TOK_EQL
-	def check(self) -> 'Comp':
-		if len(self)!=2: raise SyntaxError('E_NO_LIST')
-		if len(self[0])>1: raise SyntaxError('E_LEFT_DATA')
+	def check(self) -> 'Pred':
+		if len(self)!=1: raise SyntaxError('E_NO_LIST')
+		self.insert(0, Token('PRIOR', ''))
 		return self
+
+# (>+5+6/7 OR <+1+2+3)
+class Junc(Node):
+	opr: Token = TOK_SEP_OR
+
+
+# Value must be (>+5+6/7 OR <+1+2+3)
+class Limit(Node):
+	opr: Token = TOK_SEP_TRUE
+	def check(self) -> 'Pred':
+	if len(self)!=2: raise SyntaxError('E_NO_LIST')
 
 
 class Vector(Node):
-	opr: Token = TOK_SEP_COMP
+	opr: Token = TOK_SEP_LIMIT
 	def __str__(self) -> Memelang: return self.opr.lexeme.join(map(str, reversed(self)))
 
 
@@ -198,71 +208,57 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 	bound_vars = []
 	mtrx = Matrix()
 	vctr = Vector()
-	MODDAT_KINDS = set(MOD_KINDS)|DATUM_KINDS
-	COMP_KINDS = set(CMP_KINDS)|MODDAT_KINDS
+	TERM_KINDS = set(MOD_KINDS)|DATUM_KINDS
+	LIMIT_KINDS = set(CMP_KINDS)|TERM_KINDS
 
 	while tokens.peek():
-		comp = Comp(Data(), Data())
 
-		# COMP: Single axis constraint
-		side = LEFT
+		# LIMIT: Single axis constraint
+		preds = []
+		pred = Pred()
+		sqnc = Sqnc()
 
-		while tokens.peek() in COMP_KINDS:
+		while tokens.peek() in LIMIT_KINDS:
 
-			expr=Expr()
-			while tokens.peek() in MODDAT_KINDS:
-				pair=Pair()
-				if tokens.peek() in MOD_KINDS: pair.opr=tokens.next()
-				if tokens.peek() in DATUM_KINDS: pair.append(tokens.next())
-				else: raise SyntaxError('E_EXPR_DATUM')
-				expr.append(pair.check())
-
-			if expr:
-				comp[side].append(expr)
-
-				while tokens.peek()=='SEP_DATA':
-					if side==LEFT: raise SyntaxError('E_LEFT_DATA')
-					comp[side].opr = tokens.next()
-					if tokens.peek()=='SEP_COMP': raise SyntaxError('E_DATA_KIND_SPACE_AFTER_COMMA')
-					if tokens.peek() not in MODDAT_KINDS: raise SyntaxError('E_DATA_KIND')
-					
-					expr=Expr()
-					while tokens.peek() in MODDAT_KINDS:
-						pair=Pair()
-						if tokens.peek() in MOD_KINDS: pair.opr=tokens.next()
-						if tokens.peek() in DATUM_KINDS: pair.append(tokens.next())
-						else: raise SyntaxError('E_EXPR_DATUM')
-						expr.append(pair.check())
-
-					if expr: comp[side].append(expr)
-			
 			if tokens.peek() in CMP_KINDS:
-				comp.opr=tokens.next()
-				if side==LEFT: side=RIGHT
-				else: raise SyntaxError('E_CMP')
+				pred.opr=tokens.next()
 
-		if comp[LEFT] and side==LEFT: comp[RIGHT], comp[LEFT] = comp[LEFT], Data()
+			while tokens.peek() in TERM_KINDS:
+				term=Term()
+				if tokens.peek() in MOD_KINDS: term.opr=tokens.next()
+				if tokens.peek() in DATUM_KINDS: term.append(tokens.next())
+				else: raise SyntaxError('E_EXPR_DATUM')
+				sqnc.append(term.check())
 
-		if any(d for d in comp):
+			if sqnc: pred.append(sqnc.check())
+			if pred: preds.append(pred.check())
+
+			pred = Pred()
+			sqnc = Sqnc()
+
+		if preds:
+			if len(preds)==1 or (preds[0].opr.lexeme!='' and preds[0][0][0].opr==TOK_EQL): preds.insert(0, Pred())
 			for s in (LEFT, RIGHT):
-				if not comp[s]:
-					if ELIDE_COMP[s]: comp[s] = Data(Expr(Pair(Token('VALUE', ''), Token(ELIDE_COMP[s], ''))))
-					else: raise SyntaxError(f'E_COMP_SIDE{s}')
+				if not preds[s]:
+					if ELIDE_LIMIT[s]: preds[s] = Pred(Sqnc(Term(Token(ELIDE_LIMIT[s], '')).check()).check()).check()
+					else: raise SyntaxError(f'E_LIMIT_SIDE{s}')
+
+			limit = Limit(preds[0], Junc(*preds[1:]))
 				
-			if len(mtrx)==0 and 'VSAME' in comp.kind: raise SyntaxError('E_VSAME_OOB')
+			if len(mtrx)==0 and 'VSAME' in limit.kind: raise SyntaxError('E_VSAME_OOB')
 			
-			# FINALIZE COMP
-			vctr.prepend(comp.check())
+			# FINALIZE LIMIT
+			vctr.prepend(limit.check())
 			continue
 
-		# VCTR: Conjunctive vector of axis constraints
+		# VCTR: Predunctive vector of axis constraints
 		if tokens.peek() == 'SEP_VCTR':
 			if vctr: mtrx.append(vctr.check())
 			vctr = Vector()
 			tokens.next()
 			continue
 
-		# MTRX: Conjunctive matrix of axis constraints
+		# MTRX: Predunctive matrix of axis constraints
 		if tokens.peek() == 'SEP_MTRX':
 			if vctr: mtrx.append(vctr.check())
 			if mtrx: yield mtrx.check()
@@ -271,7 +267,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 			tokens.next()
 			continue
 
-		if tokens.peek() == 'SEP_COMP':
+		if tokens.peek() == 'SEP_LIMIT':
 			tokens.next()
 			continue
 
@@ -283,7 +279,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 class Meme(Node):
 	opr: Token = TOK_SEP_MTRX
-	results: List[List[List[Data]]]
+	results: List[List[List[Pred]]]
 	bindings: Dict[str, Tuple[Axis, Axis, Axis]]
 	src: Memelang
 
@@ -298,11 +294,17 @@ class Meme(Node):
 			if not isinstance(mtrx, Matrix): raise TypeError('E_TYPE_MTRX')
 			for vctr_idx, vctr in enumerate(mtrx):
 				if not isinstance(vctr, Vector): raise TypeError('E_TYPE_VCTR')
-				for comp_axis, comp in enumerate(vctr):
-					if not isinstance(comp, Comp): raise TypeError('E_TYPE_COMP')
+				for limit_axis, limit in enumerate(vctr):
+					if not isinstance(limit, Limit): raise TypeError('E_TYPE_LIMIT')
 					# DO VAR BIND HERE
-			self[mtrx_idx].pad(Comp(opr=Token('EQL','='), Data(Expr(Pair(Token('VALUE', ''), Token('VALUE', '')))), Data(Expr(Pair(Token('VALUE', ''), Token('VSAME', ''))))))
+			self[mtrx_idx].pad(
+				Limit(
+						Pred(Sqnc(Term(Token('PRIOR','')).check()).check()).check(),
+						Pred(Sqnc(Term(Token('VSAME','')).check()).check()).check(),
+						opr=Token('EQL','=')
+					).check()
+			)
 
-		self.results = [[[[] for comp in vctr] for vctr in mtrx] for mtrx in self]
+		self.results = [[[[] for limit in vctr] for vctr in mtrx] for mtrx in self]
 
 		return self
