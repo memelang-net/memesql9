@@ -4,13 +4,14 @@ This script is optimized for prompting LLMs
 
 MEMELANG USES AXES
 AXES ORDERED HIGH TO LOW
-WHITESPACE MEANS "NEW AXIS"
-NEVER SPACES AROUND OPERATOR
-NEVER SPACES BETWEEN COMPARATOR/COMMA AND VALUES
-NEVER SPACES BEFORE ASSN VAR
+ALWAYS WHITESPACE MEANS "NEW AXIS"
+NEVER SPACE AROUND OPERATOR
+NEVER SPACE BETWEEN COMPARATOR/COMMA AND VALUES
+NEVER SPACE BEFORE ASSN VAR
+NEVER SPACE BEFORE META
 '''
 
-MEMELANG_VER = 9.11
+MEMELANG_VER = 9.12
 
 import random, re, json
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -21,7 +22,7 @@ ELIDE = ''
 SIGIL, VAL, MSAME, VSAME, ASSN, SMLR, EOF =  '$', '_', '^', '@', ':', '~', None
 SEP_LIMIT, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
-LEFT, RIGHT, AVAR = 0, 1, 2
+LEFT, RIGHT, AVAR, AMET = 0, 1, 2, 3
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
@@ -43,7 +44,7 @@ TOKEN_KIND_PATTERNS = (
 	('EQL',			r'='),
 	('GT',			r'>'),
 	('LT',			r'<'),
-	#('META',		r'`'),
+	('META',		r'`[a-z]+'),
 	('SMLR',		re.escape(SMLR)),
 	('ASSN',		re.escape(ASSN)),
 	('VAL',			re.escape(VAL)),		# VALCARD, MATCHES WHOLE VALUE, NEVER QUOTE
@@ -71,7 +72,7 @@ IGNORE_KINDS = {'COMMENT','MTBL'}
 EBNF = '''
 TERM ::= DATUM [MOD DATUM]
 JUNC ::= {TERM} {SEP_OR {TERM}}
-LIMIT ::= [TERM] [CMP] [JUNC]
+LIMIT ::= [TERM] [CMP] [JUNC] [ASSN VAR] {META}
 VCTR ::= LIMIT {SEP_LIMIT LIMIT}
 MTRX ::= VCTR {SEP_VCTR VCTR}
 MEME ::= MTRX {SEP_MTRX MTRX}
@@ -169,11 +170,11 @@ class Junc(Node):
 	opr: Token = TOK_SEP_OR
 
 
-# Value > (1+2 OR 3+4) : $var
+# Value > (1+2 OR 3+4) : $var `meta
 class Limit(Node):
 	opr: Token = TOK_SEP_PASS
 	def check(self) -> 'Limit':
-		if len(self)!=3: raise SyntaxError('E_NO_LIST')
+		if len(self)!=4: raise SyntaxError('E_NO_LIST')
 		return self
 
 
@@ -196,13 +197,13 @@ def lex(src: Memelang) -> Iterator[Token]:
 
 def parse(src: Memelang) -> Iterator[Matrix]:
 	tokens = Stream(lex(src))
-	bindings = []
+	bindings: List[str] = []
 	mtrx, vctr = Matrix(), Vector()
 
 	while tokens.peek():
 
 		# LIMIT: Single axis constraint
-		limit = Limit(Term(), Junc(), TOK_NOVAR)
+		limit = Limit(Term(), Junc(), TOK_NOVAR, Junc())
 
 		# LEFT
 		if tokens.peek() == 'VAL': limit[LEFT].append(tokens.next())
@@ -244,6 +245,12 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 			limit[AVAR] = tokens.next()
 			bindings.append(limit[AVAR].lexeme)
 
+		# META
+		if tokens.peek() == 'META':
+			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
+			limit[AMET].append(tokens.next())
+
+
 		# FINAL LIMIT
 		if limit[LEFT]:
 			if len(mtrx)==0 and 'VSAME' in limit.kinds: raise SyntaxError('E_VSAME_OOB')			
@@ -277,7 +284,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 class Meme(Node):
 	opr: Token = TOK_SEP_MTRX
-	results: List[List[List[List[]]]]
+	results: list[list[list[list[list]]]] = []
 	src: Memelang
 
 	def __init__(self, src: Memelang):
@@ -297,6 +304,7 @@ class Meme(Node):
 					Term(Token('VAL',ELIDE)).check(),
 					Junc(Term(Token('VSAME',VSAME)).check()).check(),
 					TOK_NOVAR,
+					Junc(),
 					opr=Token('EQL',ELIDE)
 				).check())
 
@@ -371,30 +379,32 @@ class Fuzz():
 '''
 1. EXAMPLE QUERY
 MEMELANG: roles _ actor "Mark Hamill",Mark ; movie _ ; rating >4 ;;
-SQL COLS: SELECT actor, movie, rating FROM roles WHERE actor IN ('Mark Hamill', 'Mark') AND rating > 4;
-SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', 'rating', t0.rating, ';;') AS meme FROM roles AS t0 WHERE t0.actor IN ('Mark Hamill', 'Mark') AND t0.rating > 4;
+SQL: SELECT t0.actor, t0.movie, t0.rating FROM roles as t0 WHERE (t0.actor = 'Mark Hamill' or t0.actor = 'Mark') AND t0.rating > 4;
 
 2. EXAMPLE JOIN
 MEMELANG: roles _ actor "Mark Hamill" ; movie _ ; !@ @ @ ; actor _ ;;
-SQL COLS: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie;
-SQL MEME: SELECT CONCAT_WS(' ', 'roles', t0.id, 'actor', t0.actor, ';', 'movie', t0.movie, ';', t1.id, 'movie', t1.movie, ';', 'actor', t1.actor, ';;' ) AS meme FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie;
+SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie;
 
 3. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
 MEMELANG: actors _ age >21; name _ ; roles _ title @ ;;
 MEMELANG(2): actors _ age >21; name _:$n ; roles _ title $n ;;
 MEMELANG(3): actors _ age >21; name :$x ; roles _ title $x ;;
-SQL COLS: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
-SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
+SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
 
 4. EXAMPLE EMBEDDING
-MEMELANG: documents _ body <=>[0.1,0.2,0.3]>0.5 ; year >2005 ;;
-SQL COLS: SELECT t0.id, t0.body<=>[0.1,0.2,0.3], t0.year from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
-SQL MEME: SELECT CONCAT_WS(' ', 'documents', t0.id, 'body', t0.body<=>[0.1,0.2,0.3], ';', 'year', t0.year, ';;') AS meme from documents AS t0 WHERE t0.body<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
+MEMELANG: movies _ description <=>[0.1,0.2,0.3]>0.5 ; year >2005 ;;
+SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3], t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
+
+5. EXAMPLE AGGREGATION
+MEMELANG: roles _ rating`avg ; actor "Mark Hamill","Carrie Fisher"`grp ;;
+SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
+
 '''
 
 SQL = str
 Param = int|float|str|list
-Agg = bool
+Agg = int
+NOAGG, ACONST, GRPBY, HAVING = 0, 1, 2, 3
 
 class SQLUtil():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
@@ -430,17 +440,21 @@ class SQLUtil():
 
 	@staticmethod
 	def select(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		agg = False
-		agg_func = {'$sum': 'SUM', '$avg': 'AVG', '$min': 'MIN', '$max': 'MAX'}
+		agg_func = {'`sum': 'SUM', '`avg': 'AVG', '`min': 'MIN', '`max': 'MAX'}
+		agg = NOAGG
 		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
-		if limit[AVAR].lexeme in agg_func:
-			sqlterm = agg_func[limit[AVAR].lexeme] + '(' + sqlterm + ')'
-			agg = True
+		for t in limit[AMET]:
+			if t.lexeme in agg_func:
+				if agg: raise SyntaxError('E_DBL_AGG')
+				agg = HAVING
+				sqlterm = agg_func[t.lexeme] + '(' + sqlterm + ')'
+			elif t.lexeme == '`grp': agg = GRPBY
+			# TO DO: FLAG CONFLICTS
 		return sqlterm, sqlparams, agg
 		
 	@staticmethod
 	def where(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		if limit.opr.kind == 'SEP_PASS': return '', [], False
+		if limit.opr.kind == 'SEP_PASS': return '', [], NOAGG
 		sym = SQLUtil.cmp2sql[limit.opr.kind]
 		lp, rp, junc = '', '', ''
 
@@ -462,9 +476,15 @@ class SQLUtil():
 		return lp + f' {junc} '.join(rights) + rp, params, agg
 
 	@staticmethod
+	def groupby(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
+		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
+		for t in limit[AMET]:
+			if t.lexeme == '`grp': return sqlterm, sqlparams, GRPBY
+		return '', [], NOAGG
+
+	@staticmethod
 	def deref(limit: Limit, bindings: dict) -> Tuple[bool, None|Token]:
-		if limit.opr.kind != 'EQL': return False, None
-		if len(limit[LEFT])>1 or len(limit[RIGHT])>1 or len(limit[RIGHT][0])>1: return False, None
+		if limit.opr.kind != 'EQL' or len(limit[LEFT])>1 or len(limit[RIGHT])!=1 or len(limit[RIGHT][0])!=1: return False, None
 		if limit[RIGHT][0][0].kind == 'VSAME': return True, bindings.get(VSAME)
 		return limit[RIGHT][0][0] == bindings.get(VSAME), limit[RIGHT][0][0]
 
@@ -484,6 +504,8 @@ class MemeSQLTable(Meme):
 
 			for vctr in mtrx:
 
+				if len(vctr)!=4: raise SyntaxError('E_SQL_VCTR_LEN')
+
 				if not axis_name: # TO DO: MAKE THIS CHANGEABLE PER VCTR
 					primary = 'id'
 					axis_name = {0: 'val', 1: 'col', 2: 'row', 3: 'tbl'}
@@ -498,24 +520,25 @@ class MemeSQLTable(Meme):
 				# JOIN
 				if not same['tbl'] or not same['row']:
 
-					if selectall: selects.append((f'{tbl_alias}.*', [], False))
+					if selectall: selects.append((f'{tbl_alias}.*', [], NOAGG))
 					selectall = False
 
-					# TABLE ALIAS
+					# TBL
 					if not curr['tbl'] or curr['tbl'].kind != 'ALNUM': raise SyntaxError('E_TBL_ALNUM')
 					tbl_alias = f't{tbl_idx}'
 					froms.append(f"{curr['tbl']} AS {tbl_alias}")
 					tbl_idx += 1
 					pricol = f"{tbl_alias}.{primary}"
 
-					# PRIMARY KEY
+					# ROW
 					bindings[VSAME]=prev['row'] if prev['row'] is not None else None
 					curr['row']=bindings[VAL]=Token('DBCOL', pricol)
 					where, param, _ = SQLUtil.where(vctr[name_axis['row']], bindings)
-					if where: wheres.append((where, param, False))
+					if where: wheres.append((where, param, NOAGG))
 
-					selects.extend([(f"'{curr['tbl'].lexeme}' AS _a3", [], True), (f"{pricol} AS _a2", [], False)])
+					selects.extend([(f"'{curr['tbl'].lexeme}' AS _a3", [], ACONST), (f"{pricol} AS _a2", [], NOAGG)])
 
+				# COL
 				left = vctr[name_axis['val']][0]
 
 				if not curr['col']: raise SyntaxError('E_COL')
@@ -527,31 +550,28 @@ class MemeSQLTable(Meme):
 				col_name = curr['col'].datum
 				col_alias = f"{tbl_alias}.{col_name}"
 
+				# VAL
 				if prev['val']: bindings[VSAME]=prev['val']
 				curr['val']=bindings[VAL]=Token('DBCOL', col_alias)
 
-				selects.append(SQLUtil.select(vctr[name_axis['val']], bindings))
+				select = SQLUtil.select(vctr[name_axis['val']], bindings)
+				selects.append(select)
+				if select[2] == GRPBY: groupbys.append(select)
+
 				where = SQLUtil.where(vctr[name_axis['val']], bindings)
 				if where[0]:
-					if where[2]: havings.append(where)
+					if where[2]==HAVING: havings.append(where)
 					else: wheres.append(where)
-
+			
 				for axis, aname in axis_name.items():
-					if vctr[axis][AVAR].kind == 'VAR':
-						if aname == 'val':
-							if vctr[axis][AVAR].lexeme == '$gb':
-								groupbys.append(selects[-1])
-								selects[-1]=(selects[-1][0], selects[-1][1], True)
-								continue
-						bindings[vctr[axis][AVAR].lexeme]=curr[aname]
+					if vctr[axis][AVAR].kind == 'VAR': bindings[vctr[axis][AVAR].lexeme]=curr[aname]
 
 				prev = curr.copy()
 
 			if groupbys: 
 				if selectall: raise SyntaxError('E_SLCTALL_GRPBY')
-				selects = [s for s in selects if s[2]]
-			elif selectall: selects.append((f'{tbl_alias}.*', [], False))
-			selects.append((f"'{SEP_MTRX}' as _sm", [], True))
+				selects = [s for s in selects if s[2]>NOAGG]
+			elif selectall: selects.append((f'{tbl_alias}.*', [], NOAGG))
 
 			selectstr = 'SELECT ' + ', '.join([s[0] for s in selects if s[0]])
 			fromstr = ' FROM ' + ', '.join(froms)
