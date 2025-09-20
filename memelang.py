@@ -7,11 +7,10 @@ AXES ORDERED HIGH TO LOW
 ALWAYS WHITESPACE MEANS "NEW AXIS"
 NEVER SPACE AROUND OPERATOR
 NEVER SPACE BETWEEN COMPARATOR/COMMA AND VALUES
-NEVER SPACE BEFORE ASSN VAR
 NEVER SPACE BEFORE META
 '''
 
-MEMELANG_VER = 9.12
+MEMELANG_VER = 9.13
 
 import random, re, json
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -19,10 +18,10 @@ from typing import List, Iterator, Iterable, Dict, Tuple, Union
 Axis, Memelang = int, str
 
 ELIDE = ''
-SIGIL, VAL, MSAME, VSAME, ASSN, SMLR, EOF =  '$', '_', '^', '@', ':', '~', None
+SIGIL, VAL, MSAME, VSAME, META, SMLR, EOF =  '$', '_', '^', '@', ':', '~', None
 SEP_LIMIT, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
 SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
-LEFT, RIGHT, AVAR, AMET = 0, 1, 2, 3
+LEFT, RIGHT, AVAR = 0, 1, 2
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
@@ -44,9 +43,8 @@ TOKEN_KIND_PATTERNS = (
 	('EQL',			r'='),
 	('GT',			r'>'),
 	('LT',			r'<'),
-	('META',		r'`[a-z]+'),
 	('SMLR',		re.escape(SMLR)),
-	('ASSN',		re.escape(ASSN)),
+	('META',		re.escape(META)),
 	('VAL',			re.escape(VAL)),		# VALCARD, MATCHES WHOLE VALUE, NEVER QUOTE
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX-1, VCTR=-1, LIMIT)
 	('VSAME',		re.escape(VSAME)),		# REFERENCES (MTRX,   VCTR-1,  LIMIT)
@@ -68,11 +66,12 @@ CMP_KINDS = {'EQL':{'STR','NUM','DATA'},'NOT':{'STR','NUM','DATA'},'GT':{'NUM'},
 MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'EMB'},'IP':{'EMB'},'COS':{'EMB'}} #,'TSQ':{'TSQ'}
 DATUM_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','EMB'}
 IGNORE_KINDS = {'COMMENT','MTBL'}
+META_KINDS = {'ALNUM','VAR'}
 
 EBNF = '''
 TERM ::= DATUM [MOD DATUM]
 JUNC ::= {TERM} {SEP_OR {TERM}}
-LIMIT ::= [TERM] [CMP] [JUNC] [ASSN VAR] {META}
+LIMIT ::= [TERM] [CMP] [JUNC] {META VAR|ALNUM}
 VCTR ::= LIMIT {SEP_LIMIT LIMIT}
 MTRX ::= VCTR {SEP_VCTR VCTR}
 MEME ::= MTRX {SEP_MTRX MTRX}
@@ -170,11 +169,11 @@ class Junc(Node):
 	opr: Token = TOK_SEP_OR
 
 
-# Value > (1+2 OR 3+4) : $var `meta
+# Value > (1+2 OR 3+4) : $var
 class Limit(Node):
 	opr: Token = TOK_SEP_PASS
 	def check(self) -> 'Limit':
-		if len(self)!=4: raise SyntaxError('E_NO_LIST')
+		if len(self)!=3: raise SyntaxError('E_NO_LIST')
 		return self
 
 
@@ -203,7 +202,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 	while tokens.peek():
 
 		# LIMIT: Single axis constraint
-		limit = Limit(Term(), Junc(), TOK_NOVAR, Junc())
+		limit = Limit(Term(), Junc(), Junc())
 
 		# LEFT
 		if tokens.peek() == 'VAL': limit[LEFT].append(tokens.next())
@@ -237,19 +236,13 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 		if limit[RIGHT] and not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
 
-		# ASSN
-		if tokens.peek() == 'ASSN':
+		# META
+		while tokens.peek() == 'META':
 			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
 			tokens.next()
-			if tokens.peek() != 'VAR': raise SyntaxError('E_ASSN_VAR')
-			limit[AVAR] = tokens.next()
-			bindings.append(limit[AVAR].lexeme)
-
-		# META
-		if tokens.peek() == 'META':
-			if not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
-			limit[AMET].append(tokens.next())
-
+			if tokens.peek() not in META_KINDS: raise SyntaxError('E_META_KIND')
+			limit[AVAR].append(tokens.next())
+			if limit[AVAR][-1].kind == 'VAR': bindings.append(limit[AVAR][-1].lexeme)
 
 		# FINAL LIMIT
 		if limit[LEFT]:
@@ -303,7 +296,6 @@ class Meme(Node):
 			self[mtrx_idx].pad(Limit(
 					Term(Token('VAL',ELIDE)).check(),
 					Junc(Term(Token('VSAME',VSAME)).check()).check(),
-					TOK_NOVAR,
 					Junc(),
 					opr=Token('EQL',ELIDE)
 				).check())
@@ -396,7 +388,7 @@ MEMELANG: movies _ description <=>[0.1,0.2,0.3]>0.5 ; year >2005 ;;
 SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3], t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005;
 
 5. EXAMPLE AGGREGATION
-MEMELANG: roles _ rating`avg ; actor "Mark Hamill","Carrie Fisher"`grp ;;
+MEMELANG: roles _ rating:avg ; actor "Mark Hamill","Carrie Fisher":grp ;;
 SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
 
 '''
@@ -440,15 +432,15 @@ class SQLUtil():
 
 	@staticmethod
 	def select(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		agg_func = {'`sum': 'SUM', '`avg': 'AVG', '`min': 'MIN', '`max': 'MAX'}
+		agg_func = {'sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
 		agg = NOAGG
 		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
-		for t in limit[AMET]:
+		for t in limit[AVAR]:
 			if t.lexeme in agg_func:
 				if agg: raise SyntaxError('E_DBL_AGG')
 				agg = HAVING
 				sqlterm = agg_func[t.lexeme] + '(' + sqlterm + ')'
-			elif t.lexeme == '`grp': agg = GRPBY
+			elif t.lexeme == 'grp': agg = GRPBY
 			# TO DO: FLAG CONFLICTS
 		return sqlterm, sqlparams, agg
 		
@@ -478,8 +470,8 @@ class SQLUtil():
 	@staticmethod
 	def groupby(limit: Limit, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
 		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
-		for t in limit[AMET]:
-			if t.lexeme == '`grp': return sqlterm, sqlparams, GRPBY
+		for t in limit[AVAR]:
+			if t.lexeme == 'grp': return sqlterm, sqlparams, GRPBY
 		return '', [], NOAGG
 
 	@staticmethod
@@ -564,7 +556,8 @@ class MemeSQLTable(Meme):
 					else: wheres.append(where)
 			
 				for axis, aname in axis_name.items():
-					if vctr[axis][AVAR].kind == 'VAR': bindings[vctr[axis][AVAR].lexeme]=curr[aname]
+					for t in vctr[axis][AVAR]:
+						if t.kind == 'VAR': bindings[t.lexeme]=curr[aname]
 
 				prev = curr.copy()
 
