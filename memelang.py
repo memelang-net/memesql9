@@ -23,7 +23,7 @@ SQL COLS: SELECT t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE 
 SQL MEME: SELECT CONCAT_WS(' ', 'actors', t0.id, 'age', t0.age, ';', 'name', t0.name, ';', 'roles', t1.id, 'title', t1.title, ';;' ) AS meme FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name
 '''
 
-MEMELANG_VER = 9.03
+MEMELANG_VER = 9.04
 
 import random, re, json, operator
 from typing import List, Iterator, Iterable, Dict, Tuple, Any, Union
@@ -38,8 +38,9 @@ LEFT, RIGHT = 0, 1
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
-	('QUOTE',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EXOTIC CHARS "John \"Jack\" Kennedy"
-	('MDTBL',		r'-*\|'),
+	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EXOTIC CHARS "John \"Jack\" Kennedy"
+	('MTBL',		r'-*\|'),
+	('VEC',			r'\[(?:-?\d+(?:\.\d+)?)(?:,-?\d+(?:\.\d+)?)*\]'),
 
 	('POW',			r'\*\*'),
 	('MUL',			r'\*'),
@@ -81,14 +82,14 @@ TOKEN_KIND_PATTERNS = (
 MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN_KIND_PATTERNS))
 
 CMP_KINDS = {'EQL':{'STR','NUM','DATA'},'NOT':{'STR','NUM','DATA'},'GT':{'NUM'},'GE':{'NUM'},'LT':{'NUM'},'LE':{'NUM'}}
-MOD_KINDS = {'META':{},'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'POW':{'NUM'},'L2':{'VEC'},'IP':{'VEC'},'COS':{'VEC'},'TSQ':{'TSQ'}}
-DATUM_KINDS = {'ALNUM','QUOTE','INT','FLOAT','VAR','VSAME','MSAME','VAL'}
-IGNORE_KINDS = {'COMMENT','MDTBL'}
+MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'VEC'},'IP':{'VEC'},'COS':{'VEC'},'TSQ':{'TSQ'}}
+DATUM_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','VEC'}
+IGNORE_KINDS = {'COMMENT','MTBL'}
 
 EBNF = '''
-TERM ::= MOD DATUM
+TERM ::= DATUM [MOD DATUM]
 SQNC ::= TERM {TERM}
-JUNC ::= SQNC {SEP_OR SQNC}
+JUNC ::= {SQNC} {SEP_OR {SQNC}}
 LIMIT ::= [SQNC] [CMP] [JUNC]
 VCTR ::= LIMIT {SEP_LIMIT LIMIT}
 MTRX ::= VCTR {SEP_VCTR VCTR}
@@ -102,7 +103,8 @@ class Token():
 	def __init__(self, kind: str, lexeme: str):
 		self.kind = [kind]
 		self.lexeme = lexeme
-		if kind == 'QUOTE': 	self.datum = json.loads(lexeme)
+		if kind == 'QUOT': 		self.datum = json.loads(lexeme)
+		elif kind == 'VEC': 	self.datum = json.loads(lexeme)
 		elif kind == 'FLOAT': 	self.datum = float(lexeme)
 		elif kind == 'INT':		self.datum = int(lexeme)
 		else: 					self.datum = lexeme
@@ -119,9 +121,9 @@ TOK_SEP_LIMIT = Token('SEP_LIMIT', SEP_LIMIT)
 TOK_SEP_VCTR = Token('SEP_VCTR', SEP_VCTR)
 TOK_SEP_MTRX = Token('SEP_MTRX', SEP_MTRX)
 TOK_SEP_OR = Token('SEP_OR', SEP_OR)
-TOK_SEP_TERM = Token('SEP_TERM', '')
 
-TOK_SEP_FLTR = Token('SEP_FLTR', '')
+TOK_SEP_TOK = Token('SEP_TOK', '')
+TOK_SEP_TERM = Token('SEP_TERM', '')
 TOK_SEP_PASS = Token('SEP_PASS', '')
 
 
@@ -176,11 +178,7 @@ class Node(list):
 
 # +5
 class Term(Node):
-	opr: Token = TOK_EQL
-	def check(self) -> 'Term':
-		if len(self)!=1: raise SyntaxError('E_NO_LIST')
-		self.insert(0, Token('VAL', ''))
-		return self
+	opr: Token = TOK_SEP_TOK
 
 
 # 5+6/7
@@ -197,7 +195,7 @@ class Junc(Node):
 class Limit(Node):
 	opr: Token = TOK_SEP_PASS
 	def check(self) -> 'Limit':
-		if len(self)>2 or len(self)<1: raise SyntaxError('E_NO_LIST')
+		if len(self)<1 or len(self)>2: raise SyntaxError('E_NO_LIST')
 		return self
 
 
@@ -221,9 +219,8 @@ def lex(src: Memelang) -> Iterator[Token]:
 def parse(src: Memelang) -> Iterator[Matrix]:
 	tokens = Stream(lex(src))
 	bound_vars = []
-	mtrx = Matrix()
-	vctr = Vector()
-	LIMIT_KINDS = set(CMP_KINDS)|set(MOD_KINDS)|{'VAL'}|DATUM_KINDS
+	mtrx, vctr = Matrix(), Vector()
+	LIMIT_KINDS = set(CMP_KINDS)|{'VAL'}|DATUM_KINDS
 
 	while tokens.peek():
 
@@ -235,36 +232,25 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 
 			# CMP
 			if tokens.peek() in CMP_KINDS:
-				if side==RIGHT: raise SyntaxError('E_CMP_EXTRA')
-				limit.opr=tokens.next()
+				if side == RIGHT: raise SyntaxError('E_CMP_EXTRA')
+				side, limit.opr = RIGHT, tokens.next()
 				if tokens.peek() == 'SEP_LIMIT': raise SyntaxError('E_CMP_SPACE'); # NEVER SPACES INSIDE AXIS BETWEEN COMPARATOR AND VALUES
-				side=RIGHT
 
-			# Start at LEFT or RIGHT
+			# Start LEFT or RIGHT
 			elif side is None:
-				if tokens.peek() == 'VAL':
-					side = LEFT
-					tokens.next()
-				elif tokens.peek() in set(MOD_KINDS):
-					side = LEFT
-				else:
-					side = RIGHT
-					limit.opr = TOK_EQL
+				if tokens.peek() == 'VAL': side = LEFT
+				else: side, limit.opr = RIGHT, TOK_EQL
 
 			# SQNC
 			sqnc = Sqnc()
-
-			# First RIGHT term starts with DATUM
-			if tokens.peek() in DATUM_KINDS:
-				if side != RIGHT: raise SyntaxError('E_MOD_DAT')
-				term=Term(tokens.next())
-				sqnc.append(term.check())
-
-			# Subsequent TERMs start with MOD
-			while tokens.peek() in MOD_KINDS:
-				term=Term(opr=tokens.next())
+			while tokens.peek() in DATUM_KINDS:
 				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
-				term.append(tokens.next())
+				term=Term(tokens.next())
+				if tokens.peek() in MOD_KINDS:
+					term.opr=tokens.next()
+					if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
+					term.append(tokens.next())
+
 				sqnc.append(term.check())
 
 			if sqnc: limit[side].append(sqnc.check())
@@ -287,8 +273,7 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 		if tokens.peek() == 'SEP_MTRX':
 			if vctr: mtrx.append(vctr.check())
 			if mtrx: yield mtrx.check()
-			vctr = Vector()
-			mtrx = Matrix()
+			mtrx, vctr = Matrix(), Vector()
 			tokens.next()
 			continue
 
@@ -340,7 +325,7 @@ class Fuzz():
 	@staticmethod
 	def datum(kind:str) -> Memelang:
 		if kind=='ALNUM': return ''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(5))
-		if kind=='QUOTE': return json.dumps(''.join(random.choice(' -_+,./<>[]{}\'"!@#$%^&*()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(10)))
+		if kind=='QUOT': return json.dumps(''.join(random.choice(' -_+,./<>[]{}\'"!@#$%^&*()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ') for _ in range(10)))
 		if kind=='INT': return str(random.randint(-9, 9))
 		if kind=='FLOAT': return str(random.uniform(-9, 9))
 		if kind=='VAR': return SIGIL + Fuzz.datum('ALNUM')
@@ -369,7 +354,7 @@ class Fuzz():
 			data_list: List[Any] = []
 			for _ in range(data_list_len):
 				datum_type = random.randint(1, 10)
-				if datum_type == 1:  data_list.append(Fuzz.datum('QUOTE'))
+				if datum_type == 1:  data_list.append(Fuzz.datum('QUOT'))
 				elif datum_type == 2:  data_list.append(Fuzz.datum('INT'))
 				elif datum_type == 3:  data_list.append(Fuzz.datum('FLOAT'))
 				elif datum_type == 4 and bindings: data_list.append(random.choice(bindings))
