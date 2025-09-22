@@ -1,26 +1,25 @@
 '''
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
-
 MEMELANG USES AXES
 AXES ORDERED HIGH TO LOW
 ALWAYS WHITESPACE MEANS "NEW AXIS"
 NEVER SPACE AROUND OPERATOR
-NEVER SPACE BETWEEN COMPARATOR/COMMA/META AND VALUES
+NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.16
+MEMELANG_VER = 9.17
 
 import random, re, json
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
 
 Memelang = str
 
-ELIDE = ''
-SIGIL, VAL, MSAME, VSAME, SEP_META, SMLR, EOF =  '$', '_', '^', '@', ':', '~', None
+ELIDE, SIGIL, VAL, MSAME, VSAME, SEP_FUNC, META, EOF =  '', '$', '_', '^', '@', ':', '%', None
 SEP_AXIS, SEP_VCTR, SEP_MTRX, SEP_OR = ' ', ';', ';;', ','
-SEP_VCTR_PRETTY, SEP_MTRX_PRETTY = ' ; ', ' ;;\n'
-LEFT, RIGHT = 0, 1
+L, R = 0, 1
+AXIS_QI, AXIS_QK, AXIS_QV = 2, 1, 0
+
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
@@ -31,6 +30,7 @@ TOKEN_KIND_PATTERNS = (
 	('MUL',			r'\*'),
 	('ADD',			r'\+'),
 	('DIV',			r'\/'),
+	('META',		re.escape(META) + r'[a-z]+'),
 	('MOD',			r'\%'),
 	#('TSQ',		r'@@'),
 	('L2',			r'<->'),
@@ -42,16 +42,16 @@ TOKEN_KIND_PATTERNS = (
 	('EQL',			r'='),
 	('GT',			r'>'),
 	('LT',			r'<'),
-	('SMLR',		re.escape(SMLR)),
-	('VAL',			re.escape(VAL)),		# VALCARD, MATCHES WHOLE VALUE, NEVER QUOTE
+	('SMLR',		r'~'),
+	('VAL',			re.escape(VAL)),		# NEVER QUOTE
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MTRX-1, VCTR=-1, LIMIT)
 	('VSAME',		re.escape(VSAME)),		# REFERENCES (MTRX,   VCTR-1,  LIMIT)
-	('VAR',			r'\$[A-Za-z0-9_]+'),
+	('VAR',			re.escape(SIGIL) + r'[A-Za-z0-9_]+'),
 	('ALNUM',		r'[A-Za-z][A-Za-z0-9_]*'), # ALPHANUMERICS ARE UNQUOTED
 	('FLOAT',		r'-?\d*\.\d+'),
 	('INT',			r'-?\d+'),
 	('SUB',			r'\-'), # AFTER INT/FLOAT
-	('SEP_META',	re.escape(SEP_META)),
+	('SEP_FUNC',	re.escape(SEP_FUNC)),
 	('SEP_MTRX',	re.escape(SEP_MTRX)),
 	('SEP_VCTR',	re.escape(SEP_VCTR)),
 	('SEP_OR',		re.escape(SEP_OR)),
@@ -63,15 +63,15 @@ MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN
 
 CMP_KINDS = {'EQL':{'STR','NUM','DATA'},'NOT':{'STR','NUM','DATA'},'GT':{'NUM'},'GE':{'NUM'},'LT':{'NUM'},'LE':{'NUM'},'SMLR':{'STR'}}
 MOD_KINDS = {'MUL':{'NUM'},'ADD':{'NUM'},'SUB':{'NUM'},'DIV':{'NUM'},'MOD':{'NUM'},'POW':{'NUM'},'L2':{'EMB'},'IP':{'EMB'},'COS':{'EMB'}} #,'TSQ':{'TSQ'}
-DATUM_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','EMB'}
+DAT_KINDS = {'ALNUM','QUOT','INT','FLOAT','VAR','VSAME','MSAME','VAL','EMB','META'}
 IGNORE_KINDS = {'COMMENT','MTBL'}
-META_KINDS = {'ALNUM','VAR'}
+FUNC_KINDS = {'ALNUM','VAR'}
 
 EBNF = '''
-TERM ::= DATUM [MOD DATUM]
-JUNC ::= {TERM} {SEP_OR {TERM}}
-LIMIT ::= [TERM] [CMP] [JUNC]
-AXIS ::= LIMIT {META VAR|ALNUM}
+TERM ::= DAT [MOD DAT]
+LEFT ::= TERM {FUNC VAR|ALNUM}
+RIGHT ::= {TERM} {SEP_OR TERM}
+AXIS ::= LEFT [CMP RIGHT]
 VCTR ::= AXIS {SEP_AXIS AXIS}
 MTRX ::= VCTR {SEP_VCTR VCTR}
 MEME ::= MTRX {SEP_MTRX MTRX}
@@ -79,7 +79,7 @@ MEME ::= MTRX {SEP_MTRX MTRX}
 
 class Token():
 	kind: str
-	kinds: list[str]
+	kinds: List[str]
 	lexeme: str
 	datum: Union[str, float, int, list]
 	def __init__(self, kind: str, lexeme: str):
@@ -90,6 +90,7 @@ class Token():
 		elif kind == 'EMB': 	self.datum = json.loads(lexeme)
 		elif kind == 'FLOAT': 	self.datum = float(lexeme)
 		elif kind == 'INT':		self.datum = int(lexeme)
+		elif kind == 'NULL':	self.datum = None
 		else: 					self.datum = lexeme
 
 	def dump(self) -> Union[str, float, int, list]: return self.datum
@@ -97,16 +98,16 @@ class Token():
 	def __eq__(self, other): return isinstance(other, Token) and self.kind == other.kind and self.lexeme == other.lexeme
 
 
+TOK_NULL = Token('NULL', '')
 TOK_EQL = Token('EQL', ELIDE)
 TOK_NOT = Token('NOT', '!')
 TOK_SEP_AXIS = Token('SEP_AXIS', SEP_AXIS)
 TOK_SEP_VCTR = Token('SEP_VCTR', SEP_VCTR)
 TOK_SEP_MTRX = Token('SEP_MTRX', SEP_MTRX)
 TOK_SEP_OR = Token('SEP_OR', SEP_OR)
-TOK_SEP_META = Token('SEP_META', SEP_META)
+TOK_SEP_FUNC = Token('SEP_FUNC', SEP_FUNC)
 TOK_SEP_TOK = Token('SEP_TOK', '')
 TOK_SEP_PASS = Token('SEP_PASS', '')
-
 
 class Stream:
 	def __init__(self, token: Iterable[Token]):
@@ -129,7 +130,7 @@ class Stream:
 
 
 class Node(list):
-	opr: Token = TOK_EQL
+	opr: Token = TOK_NULL
 	def __init__(self, *items: Union['Node', Token], opr:Token|None = None):
 		super().__init__(items)
 		if opr is not None: self.opr = opr
@@ -146,49 +147,66 @@ class Node(list):
 
 	def dump(self) -> List: return [self.opr.dump(), [item.dump() for item in self]]
 	def check(self) -> 'Node': 
-		if len(self)==0: raise SyntaxError('E_NO_LIST')
+		if len(self)==0: raise SyntaxError('E_NODE_LIST')
 		return self
 	def __str__(self) -> Memelang: return self.opr.lexeme.join(map(str, self))
 
 	@property
-	def kinds(self) -> list[str]:
+	def kinds(self) -> List[str]:
 		kinds=[]
 		for n in self: kinds.extend(n.kinds)
 		return kinds
 
 
-# 1+2
+# DAT [MOD DAT]
 class Term(Node):
 	opr: Token = TOK_SEP_TOK
+	def check(self) -> 'Term':
+		if not len(self): raise SyntaxError('E_NO_LIST')
+		if any(not isinstance(t, Token) or t.kind not in DAT_KINDS for t in self): raise SyntaxError('E_TERM_DAT')
+		return self
+
+TERM_ELIDE = Term(Token('VAL',ELIDE))
 
 
-# (1+2 OR 3+4)
-class Junc(Node):
+# TERM {OR TERM}
+class Right(Node):
 	opr: Token = TOK_SEP_OR
-
-
-# Value > (1+2 OR 3+4)
-class Limit(Node):
-	opr: Token = TOK_SEP_PASS
-	def check(self) -> 'Limit':
-		if len(self)!=2: raise SyntaxError('E_NO_LIST')
+	def check(self) -> 'Right':
+		if len(self) and any(not isinstance(t, Term) for t in self): raise SyntaxError('E_RIGHT_TERM')
 		return self
 
 
-# Limit : $var : meta
+# TERM {FUNC VAR|ALNUM}
+class Left(Node): 
+	opr: Token = TOK_SEP_FUNC
+	def check(self) -> 'Left':
+		if not len(self): raise SyntaxError('E_NO_LIST')
+		if not isinstance(self[0], Term): raise SyntaxError('E_L_TERM')
+		if len(self)>1 and any(t.kind not in {'ALNUM','VAR'} for t in self[1:]): raise SyntaxError('E_LEFT_FUNC')
+		return self
+
+
+# LEFT CMP RIGHT
 class Axis(Node):
-	opr: Token = TOK_SEP_META
-	def check(self) -> 'Node': 
-		if len(self)==0: raise SyntaxError('E_NO_LIST')
-		if not isinstance(self[0], Limit): raise SyntaxError('E_AXIS_LIMIT')
+	opr: Token = TOK_SEP_PASS
+	def check(self) -> 'Axis': 
+		if len(self)!=2: raise SyntaxError('E_NODE_LIST')
+		if not isinstance(self[0], Left): raise SyntaxError('E_AXIS_LEFT')
+		if not isinstance(self[1], Right): raise SyntaxError('E_AXIS_RIGHT')
 		return self
+	@property
+	def singleton(self) -> Token:
+		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
 
 
+# AXIS {SEP_AXIS AXIS}
 class Vector(Node):
 	opr: Token = TOK_SEP_AXIS
 	def __str__(self) -> Memelang: return self.opr.lexeme.join(map(str, reversed(self)))
 
 
+# VCTR {SEP_VCTR VCTR}
 class Matrix(Node):
 	opr: Token = TOK_SEP_VCTR
 
@@ -209,44 +227,43 @@ def parse(src: Memelang) -> Iterator[Matrix]:
 	while tokens.peek():
 
 		# AXIS
-		limit = Limit(Term(), Junc())
-		axis = Axis(Limit())
+		axis = Axis(Left(), Right())
 
 		# WILD
-		if tokens.peek() == 'VAL': limit[LEFT].append(tokens.next())
+		if tokens.peek() == 'VAL': axis[L].append(Term(tokens.next()))
 
 		# NON-WILD
 		else:
 			# LEFT
-			if tokens.peek() in MOD_KINDS: limit[LEFT]=parse_term(Token('VAL', ELIDE), tokens, bindings)
+			if tokens.peek() in MOD_KINDS: axis[L].append(parse_term(Token('VAL', ELIDE), tokens, bindings))
+
+			# FUNC
+			while tokens.peek() == 'SEP_FUNC':
+				if not axis[L]: axis[L].append(TERM_ELIDE)
+				tokens.next()
+				t = tokens.next()
+				if t.kind not in FUNC_KINDS: raise SyntaxError('E_FUNC_KIND')
+				if t.kind == 'VAR': bindings.append(t.lexeme)
+				axis[L].append(t)
 				
 			# CMP
 			if tokens.peek() in CMP_KINDS:
-				limit.opr=tokens.next()
-				if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_CMP_DATUM')
+				axis.opr=tokens.next()
+				if tokens.peek() not in DAT_KINDS: raise SyntaxError('E_CMP_DAT')
 
 			# RIGHT
-			while tokens.peek() in DATUM_KINDS:
-				if limit.opr.kind == 'SEP_PASS': limit.opr=Token('EQL', ELIDE)
-				limit[RIGHT].append(parse_term(tokens.next(), tokens, bindings))
+			while tokens.peek() in DAT_KINDS:
+				if not axis[L]: axis[L].append(TERM_ELIDE)
+				if axis.opr.kind == 'SEP_PASS': axis.opr=Token('EQL', ELIDE)
+				axis[R].append(parse_term(tokens.next(), tokens, bindings))
 				if tokens.peek() == 'SEP_OR':
 					tokens.next()
-					if tokens.peek() not in DATUM_KINDS: raise SyntaxError('E_OR_TRAIL')
+					if tokens.peek() not in DAT_KINDS: raise SyntaxError('E_OR_TRAIL')
 
-			# META
-			while tokens.peek() == 'SEP_META':
-				tokens.next()
-				t = tokens.next()
-				if t.kind not in META_KINDS: raise SyntaxError('E_META_KIND')
-				axis.append(t)
-				if axis[-1].kind == 'VAR': bindings.append(t.lexeme)
+			if axis.opr.kind in CMP_KINDS and not axis[R]: raise SyntaxError('E_CMP_RIGHT')
 
-
-			if (limit[RIGHT] or len(axis)>1) and not limit[LEFT]: limit[LEFT].append(Token('VAL', ELIDE))
-
-		# FINAL LIMIT
-		if limit[LEFT]:	
-			axis[LEFT]=limit.check()
+		if axis[L]:	
+			axis[L], axis[R] = axis[L].check(), axis[R].check()
 			vctr.prepend(axis.check())
 			continue
 
@@ -281,12 +298,10 @@ def parse_term (token: Token, tokens: Stream, bindings: List[str]) -> Term:
 	if tokens.peek() in MOD_KINDS:
 		term.opr=tokens.next()
 		t = tokens.next()
-		if t.kind not in DATUM_KINDS: raise SyntaxError('E_EXPR_DATUM')
+		if t.kind not in DAT_KINDS: raise SyntaxError('E_EXPR_DAT')
 		if t.kind in {'VSAME', 'VAR'} and t.lexeme not in bindings: raise SyntaxError('E_VAR_BIND')
 		term.append(t)
 	return term.check()
-
-
 
 class Meme(Node):
 	opr: Token = TOK_SEP_MTRX
@@ -306,12 +321,10 @@ class Meme(Node):
 					if not isinstance(axis, Axis): raise TypeError('E_TYPE_AXIS')
 					# DO VAR BIND HERE
 			self[mtrx_idx].pad(Axis(
-					Limit(
-						Term(Token('VAL',ELIDE)).check(),
-						Junc(Term(Token('VSAME',VSAME)).check()).check(),
-						opr=Token('EQL',ELIDE)
-					).check()
-				)
+					Left(TERM_ELIDE).check(),
+					Right(Term(Token('VSAME',VSAME)).check()).check(),
+					opr=Token('EQL',ELIDE)
+				).check()
 			)
 
 		return self
@@ -337,7 +350,7 @@ class Fuzz():
 	def rterm(mode: str) -> Memelang:
 		if mode == 'NUM':
 			term = Fuzz.datum('FLOAT')
-			if random.randint(0,1): term = random.choice(['+','-','*','/']) + Fuzz.datum('FLOAT')
+			if random.randint(0,1): term += random.choice(['+','-','*','/']) + Fuzz.datum('FLOAT')
 		elif mode == 'STR': term = random.choice([Fuzz.datum('QUOT'), Fuzz.datum('ALNUM')])
 		elif mode=='VEC': term = Fuzz.datum('EMB')
 		return term
@@ -356,11 +369,8 @@ class Fuzz():
 
 		comp = random.choice(['=','!=','>','<','<=','>='])
 
-		if comp in {'<','<=','>','>='}:
-			if random.randint(0, 3): mode='NUM'
-			else mode='VEC'
-		else:
-			mode='STR'
+		if comp in {'<','<=','>','>='}: mode = 'NUM' if random.randint(0, 3) else 'VEC'
+		else: mode='STR'
 
 		return Fuzz.lterm(mode) + comp + Fuzz.junc(mode)
 
@@ -374,7 +384,7 @@ class Fuzz():
 
 	@staticmethod
 	def mtrx_table(col_len:int = 5) -> Memelang:
-		return Fuzz.datum('ALNUM') + SEP_AXIS + VAL + SEP_AXIS + SEP_VCTR_PRETTY.join(Fuzz.datum('ALNUM') + SEP_AXIS + Fuzz.limit() for _ in range(col_len)) + SEP_MTRX_PRETTY
+		return Fuzz.datum('ALNUM') + SEP_AXIS + VAL + SEP_AXIS + SEP_VCTR.join(Fuzz.datum('ALNUM') + SEP_AXIS + Fuzz.limit() for _ in range(col_len)) + SEP_MTRX
 
 
 
@@ -382,24 +392,24 @@ class Fuzz():
 
 '''
 1. EXAMPLE QUERY
-MEMELANG: roles _ actor "Mark Hamill",Mark ; movie _ ; rating >4 ;;
+MEMELANG: roles _ actor "Mark Hamill",Mark; movie _; rating >4;;
 SQL: SELECT t0.actor, t0.movie, t0.rating FROM roles as t0 WHERE (t0.actor = 'Mark Hamill' or t0.actor = 'Mark') AND t0.rating > 4;
 
 2. EXAMPLE JOIN
-MEMELANG: roles _ actor "Mark Hamill" ; movie _ ; !@ @ @ ; actor _ ;;
+MEMELANG: roles _ actor "Mark Hamill"; movie _; !@ @ @; actor _;;
 SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id != t0.id AND t1.movie = t0.movie;
 
 3. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
-MEMELANG: actors _ age >21; name _ ; roles _ title @ ;;
-MEMELANG(2): actors _ age >21; name :$n ; roles _ title $n ;;
+MEMELANG: actors _ age >21; name _; roles _ title @;;
+MEMELANG(2): actors _ age >21; name:$n; roles _ title $n;;
 SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
 
 4. EXAMPLE EMBEDDING
-MEMELANG: movies _ description <=>[0.1,0.2,0.3]>0.5:dsc ; year >2005 ; :lmt 10 ;;
-SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3], t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3] DESC LIMIT 10;
+MEMELANG: movies _ description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %q lmt 10; beg 100;;
+SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3], t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3] DESC LIMIT 10 OFFSET 100;
 
 5. EXAMPLE AGGREGATION
-MEMELANG: roles _ rating:avg ; actor "Mark Hamill","Carrie Fisher":grp ;;
+MEMELANG: roles _ rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
 SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
 
 '''
@@ -411,7 +421,7 @@ ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
 
 class SQLUtil():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
-	meta_key_allow = {"grp","asc","dsc","sum","avg","min","max"}
+	func_keys = {"grp","asc","dsc","sum","avg","min","max"}
 
 	@staticmethod
 	def holder(token: Token, bindings: dict) -> SQL:
@@ -445,12 +455,10 @@ class SQLUtil():
 
 	@staticmethod
 	def select(axis: Axis, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		limit = axis[LEFT]
 		agg_func = {'sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
 		agg = ANONE
-		sqlterm, sqlparams = SQLUtil.term(limit[LEFT], bindings)
-		for t in axis[RIGHT:]:
-			if t.lexeme not in SQLUtil.meta_key_allow: raise SyntaxError('E_META_BAD')
+		sqlterm, sqlparams = SQLUtil.term(axis[L][L], bindings)
+		for t in axis[L][R:]:
 			if t.lexeme in agg_func:
 				if agg: raise SyntaxError('E_DBL_AGG')
 				agg = AHAV
@@ -461,83 +469,68 @@ class SQLUtil():
 		
 	@staticmethod
 	def where(axis: Axis, bindings: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		limit = axis[LEFT]
-		if limit.opr.kind == 'SEP_PASS': return '', [], ANONE
-		sym = SQLUtil.cmp2sql[limit.opr.kind]
-		lp, rp, junc = '', '', ''
+		if axis.opr.kind == 'SEP_PASS': return '', [], ANONE
+		sym = SQLUtil.cmp2sql[axis.opr.kind]
+		lp, rp, junc, rights = '', '', '', []
 
-		if len(limit[RIGHT]) > 1:
+		if len(axis[R]) > 1:
 			lp, rp = '(', ')'
-			junc = 'AND' if limit.opr.kind == 'NOT' else 'OR'
+			junc = ' AND ' if axis.opr.kind == 'NOT' else ' OR '
 
 		leftsql, params, agg = SQLUtil.select(axis, bindings)
-		rights = []
-		for right in limit[RIGHT]:
+		for right in axis[R]:
 			sql, subparams = SQLUtil.term(right, bindings)
-
-			if sym in ('LIKE','ILIKE'):
-				sql = sql.replace('%s', "CONCAT('%', %s, '%')")
-
+			if sym in ('LIKE','ILIKE'): sql = sql.replace('%s', "CONCAT('%', %s, '%')", 1)
 			rights.append(f"{leftsql} {sym} {sql}")
 			params.extend(subparams)
 
-		return lp + f' {junc} '.join(rights) + rp, params, agg
+		return lp + junc.join(rights) + rp, params, agg
 
 	@staticmethod
-	def deref(limit: Limit, bindings: dict) -> Tuple[bool, None|Token]:
-		if limit.opr.kind != 'EQL' or len(limit[LEFT])>1 or len(limit[RIGHT])!=1 or len(limit[RIGHT][0])!=1: return False, None
-		if limit[RIGHT][0][0].kind == 'VSAME': return True, bindings.get(VSAME)
-		return limit[RIGHT][0][0] == bindings.get(VSAME), limit[RIGHT][0][0]
+	def deref(axis: Axis, bindings: dict) -> Tuple[bool, Token]:
+		if axis.singleton.kind == 'VSAME': return True, bindings.get(VSAME)
+		return (bindings.get(VSAME) is not None and axis.singleton == bindings.get(VSAME)), axis.singleton
 
 
 # TRANSLATE TO POSTGRES
 class MemePGSQL(Meme):
 	def select(self) -> List[Tuple[SQL, List[Param]]]:
-		META_KEY_AXIS: int = 1
-		META_VAL_AXIS: int = 0
-		meta_key_allow = {'lmt','beg','val','col','row','tbl','pri'}
 		tbl_idx: int = 0
-		sqls: list[Tuple[SQL, List[Param]]] = []
-		axis_name: Dict[int, str] = {}
-		name_axis: Dict[str, int] = {}
-		filter_axis_names = ('val','col','row','tbl')
+		sqls: List[Tuple[SQL, List[Param]]] = []
+		axes = ('val','col','row','tbl')
 		
 		for mtrx in self:
 			selectall = False
 			tbl_alias = None
 			limitstr = ''
 			froms, wheres, selects, orderbys, groupbys, havings, bindings = [], [], [], [], [], [], {}
-			prev = {aname: None for aname in filter_axis_names}
+			prev = {aname:None for aname in axes}
+			metas = {'val':0,'col':1,'row':2,'tbl':3,'lmt':0,'beg':0,'pri':'id'}
 
 			# META VECTORS
-			# :lmt 10; :beg 100
-			metas = {'val': 0, 'col': 1, 'row': 2, 'tbl': 3, 'pri': 'id'}
+			# ; %q lmt 10; beg 100
+			meta_mode = False
 			for vctr in mtrx:
-				if len(vctr[META_KEY_AXIS])<2: continue
-				if len(vctr[META_KEY_AXIS])>2: raise SyntaxError('E_META_LEN')
-				metakey = vctr[META_KEY_AXIS][RIGHT].lexeme
-				if metakey not in meta_key_allow: raise SyntaxError('E_META_ALLOW')
-				if metakey in metas: raise SyntaxError('E_META_DUP')
-				limit = vctr[META_VAL_AXIS][LEFT]
-				if limit.opr.kind!='EQL' or len(limit[RIGHT])!=1 or len(limit[RIGHT][LEFT])!=1: raise SyntaxError('E_AXIS_MVAL')
-				metas[metakey] = limit[RIGHT][LEFT][LEFT].datum
-
-			for aname in filter_axis_names:
-				name_axis[aname] = metas[aname]
-				axis_name[metas[aname]] = aname
+				if len(vctr)>=AXIS_QI+1: meta_mode = (vctr[AXIS_QI].singleton.lexeme == META+'q')
+				if meta_mode:
+					if len(vctr)<=AXIS_QK: raise SyntaxError('E_META_LEN')
+					key, val = vctr[AXIS_QK].singleton, vctr[AXIS_QV].singleton
+					if key.lexeme in metas and isinstance(val.datum, type(metas[key.lexeme])): metas[key.lexeme] = val.datum
+					else: raise SyntaxError('E_META')					
 
 			# FILTER VECTORS
-			# tbl row col val>num:meta;
+			# tbl row col term:meta>term,term;
+			meta_mode = False
 			for vctr in mtrx:
-
-				if len(vctr[META_KEY_AXIS])>1: continue
+				if len(vctr)>=AXIS_QI+1: meta_mode = (vctr[AXIS_QI].singleton.lexeme == META+'q')
+				if meta_mode: continue
 				if len(vctr)!=4: raise SyntaxError('E_SQL_VCTR_LEN')
 
-				curr = {aname: None for aname in filter_axis_names}
-				same = {aname: None for aname in filter_axis_names}
-				for aname in filter_axis_names: same[aname], curr[aname] = SQLUtil.deref(vctr[name_axis[aname]][LEFT], {VSAME: prev[aname]})
+				curr = {aname: None for aname in axes}
+				same = {aname: None for aname in axes}
+				for aname in axes: same[aname], curr[aname] = SQLUtil.deref(vctr[metas[aname]], {VSAME: prev[aname]})
 
-				valaxis = vctr[name_axis['val']]
+				valaxis = vctr[metas['val']]
 
 				# JOIN
 				if not same['tbl'] or not same['row']:
@@ -555,14 +548,14 @@ class MemePGSQL(Meme):
 					# ROW
 					bindings[VSAME]=prev['row'] if prev['row'] is not None else None
 					curr['row']=bindings[VAL]=Token('DBCOL', pricol)
-					where, param, _ = SQLUtil.where(vctr[name_axis['row']], bindings)
+					where, param, _ = SQLUtil.where(vctr[metas['row']], bindings)
 					if where: wheres.append((where, param, ANONE))
 
 					selects.extend([(f"'{curr['tbl'].lexeme}' AS _a3", [], ACNST), (f"{pricol} AS _a2", [], ANONE)])
 
 				# COL
 				if not curr['col']: raise SyntaxError('E_COL')
-				elif curr['col'].kind == 'VAL' and valaxis[LEFT][LEFT][LEFT].kind == 'VAL': # LEFT CHECK IS LAZY
+				elif curr['col'].kind == 'VAL' and vctr[metas['col']].opr.kind == 'SEP_PASS':
 					selectall=True
 					continue
 				elif curr['col'].kind != 'ALNUM': raise SyntaxError('E_COL_ALNUM')
@@ -577,17 +570,17 @@ class MemePGSQL(Meme):
 				select = SQLUtil.select(valaxis, bindings)
 				selects.append(select)
 
-				if any(t.lexeme=='grp' for t in valaxis[RIGHT:]): groupbys.append(select)
-				if any(t.lexeme=='asc' for t in valaxis[RIGHT:]): orderbys.append((select[0]+' ASC', select[1], select[2]))
-				elif any(t.lexeme=='dsc' for t in valaxis[RIGHT:]): orderbys.append((select[0]+' DESC', select[1], select[2]))
+				if any(t.lexeme=='grp' for t in valaxis[L][R:]): groupbys.append(select)
+				if any(t.lexeme=='asc' for t in valaxis[L][R:]): orderbys.append((select[0]+' ASC', select[1], select[2]))
+				elif any(t.lexeme=='dsc' for t in valaxis[L][R:]): orderbys.append((select[0]+' DESC', select[1], select[2]))
 
 				where = SQLUtil.where(valaxis, bindings)
 				if where[0]:
 					if where[2]==AHAV: havings.append(where)
 					else: wheres.append(where)
 			
-				for axis, aname in axis_name.items():
-					for t in vctr[axis][RIGHT]:
+				for aname in axes:
+					for t in vctr[metas[aname]][L][R:]:
 						if t.kind == 'VAR': bindings[t.lexeme]=curr[aname]
 
 				prev = curr.copy()
@@ -603,7 +596,7 @@ class MemePGSQL(Meme):
 			groupbystr = '' if not groupbys else ' GROUP BY ' + ', '.join([s[0] for s in groupbys if s[0]])
 			havingstr = '' if not havings else ' HAVING ' + ' AND '.join([s[0] for s in havings if s[0]])
 			orderbystr = '' if not orderbys else ' ORDER BY ' + ', '.join([s[0] for s in orderbys if s[0]])
-			limitstr = '' if 'lmt' not in metas else (f" LIMIT {int(metas['lmt'])}" + ('' if 'beg' not in metas else f" OFFSET {int(metas['beg'])}"))
+			limitstr = '' if not metas['lmt'] else (f" LIMIT {metas['lmt']}" + ('' if not metas['beg'] else f" OFFSET {metas['beg']}"))
 			params = [p for s in selects+wheres+groupbys+havings+orderbys for p in s[1] if p is not None]
 			sqls.append((selectstr + fromstr + wherestr + groupbystr + havingstr + orderbystr + limitstr, params))
 
