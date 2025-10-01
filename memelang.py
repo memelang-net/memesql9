@@ -61,6 +61,7 @@ MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN
 
 IGNORE_KINDS = {'COMMENT','MTBL'}
 FUNC_KINDS = {'ALNUM','VAR'}
+DELIDE = {'SAME':SAME,'MSAME':MSAME,'VAL': VAL,'EQL': '='}
 
 D, Q, M = MODE+'d', MODE+'q', MODE+'m'
 VOCAB = {
@@ -83,8 +84,8 @@ VOCAB = {
 
 EBNF = '''
 TERM ::= DAT [MOD DAT]
-LEFT ::= TERM {FUNC VAR|ALNUM}
-RIGHT ::= {TERM} {OR TERM}
+LEFT ::= TERM {SF VAR|ALNUM}
+RIGHT ::= TERM {OR TERM}
 AXIS ::= LEFT [CMP RIGHT]
 VEC ::= [MODE] AXIS {SA AXIS}
 MAT ::= VEC {SV VEC}
@@ -95,19 +96,21 @@ class Token():
 	kind: str
 	kinds: List[str]
 	lex: str
+	delide: str
 	dat: Union[str, float, int, list]
 	def __init__(self, kind: str, lex: str):
 		self.kind = kind
 		self.kinds = [kind]
 		self.lex = lex
+		self.delide = DELIDE[kind] if lex == '' and kind in DELIDE else lex
 		if kind=='QUOT': 	self.dat = json.loads(lex)
 		elif kind=='EMB': 	self.dat = json.loads(lex)
-		elif kind=='DEC': self.dat = float(lex)
+		elif kind=='DEC': 	self.dat = float(lex)
 		elif kind=='INT':	self.dat = int(lex)
 		elif kind=='NULL':	self.dat = None
 		else: 				self.dat = lex
 
-	def dump(self) -> Union[str, float, int, list, None]: return self.dat
+	def dump(self) -> Tuple[str, Union[str, float, int, list, None]]: return (self.kind, self.dat)
 	def __str__(self) -> Memelang: return self.lex
 	def __eq__(self, other): return isinstance(other, Token) and self.kind==other.kind and self.lex==other.lex
 
@@ -199,7 +202,8 @@ class Axis(Node):
 		return self
 	@property
 	def single(self) -> Token:
-		return TOK_NULL if self.opr.kind!='EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
+		if self.opr.kind == 'SEP_PASS': return Token('VAL', VAL)
+		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
 
 
 # AXIS {SA AXIS}
@@ -416,29 +420,29 @@ class Fuzz():
 ### SQL ### 
 
 '''
-1. EMAMPLE TABLE DEFINIIONS
+1. EXAMPLE TABLE DEFINITIONS
 %d roles _ id {ROL}ID; {TYP}INT; >0; rating {TYP}DEC; >0; <=5; actor {TYP}STR; movie {TYP}STR;;
 %d actors _ id {ROL}ID; {TYP}INT; >0; name {TYP}STR;; age {TYP}INT; >=0; <200;;
 %d movies _ id {ROL}ID; {TYP}INT; >0; description {TYP}STR; year >1800; <2100; genre scifi,drama,comedy,documentary;;
 
-2. EMAMPLE QUERY
+2. EXAMPLE QUERY
 MEMELANG: roles _ actor "Mark Hamill",Mark; movie _; rating >4;;
 SQL: SELECT t0.actor, t0.movie, t0.rating FROM roles as t0 WHERE (t0.actor = 'Mark Hamill' or t0.actor = 'Mark') AND t0.rating > 4;
 
-3. EMAMPLE JOIN
+3. EXAMPLE JOIN
 MEMELANG: roles _ actor "Mark Hamill"; movie _; !@ @ @; actor _;;
 SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id!=t0.id AND t1.movie = t0.movie;
 
-4. EMAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
+4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
 MEMELANG: actors _ age >21; name _; roles _ title @;;
 MEMELANG(2): actors _ age >21; name:$n; roles _ title $n;;
 SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
 
-5. EMAMPLE EMBEDDING
+5. EXAMPLE EMBEDDING
 MEMELANG: movies _ description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
 SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3], t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3] DESC LIMIT 10 OFFSET 100;
 
-6. EMAMPLE AGGREGATION
+6. EXAMPLE AGGREGATION
 MEMELANG: roles _ rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
 SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
 '''
@@ -515,11 +519,6 @@ class SQLUtil():
 
 		return lp + junc.join(ts) + rp, params, agg
 
-	@staticmethod
-	def deref(axis: Axis, bind: dict) -> Tuple[bool, Token]:
-		if axis.single.kind=='SAME': return True, bind.get(SAME)
-		return (bind.get(SAME) is not None and axis.single==bind.get(SAME)), axis.single
-
 
 # TRANSLATE TO POSTGRES
 class MemePGSQL(Meme):
@@ -527,7 +526,7 @@ class MemePGSQL(Meme):
 		tab_idx: int = 0
 		sql: List[Tuple[SQL, List[Param]]] = []
 		axes = ('val','col','row','tab')
-		
+
 		for mat in self:
 			selectall = False
 			tab_alias = None
@@ -551,19 +550,24 @@ class MemePGSQL(Meme):
 				if vec.mode!=Q: continue
 				if len(vec)<4: raise Err('E_Q_LEN')
 
+				bind[VAL]=None
 				curr = {name: None for name in axes}
-				same = {name: None for name in axes}
-				for name in axes: same[name], curr[name] = SQLUtil.deref(vec[config[M][name]], {SAME: prev[name]})
+				for name in axes:
+					axis = vec[config[M][name]]
+					bind[SAME] = prev[name]
+					curr[name] = bind[axis.single.delide] if axis.single.delide in bind else axis.single
 
+				bind[SAME] = None
+				colaxis = vec[config[M]['col']]
 				valaxis = vec[config[M]['val']]
 
 				# JOIN
-				if not same['tab'] or not same['row']:
+				if prev['tab']!=curr['tab'] or prev['row']!=curr['row']:
 
 					if selectall: selects.append((f'{tab_alias}.*', [], ANONE))
 					selectall = False
 
-					# TBL
+					# TAB
 					if not curr['tab'] or curr['tab'].kind!='ALNUM': raise Err('E_TBL_ALNUM')
 					tab_alias = f't{tab_idx}'
 					froms.append(f"{curr['tab']} AS {tab_alias}")
@@ -579,16 +583,12 @@ class MemePGSQL(Meme):
 					selects.extend([(f"'{curr['tab'].lex}' AS _a3", [], ACNST), (f"{pricol} AS _a2", [], ANONE)])
 
 				# COL
-				if not curr['col']: raise Err('E_COL')
-				elif curr['col'].kind=='VAL':
+				if colaxis.single.kind=='VAL':
 					selectall=True
 					continue
-				elif curr['col'].kind!='ALNUM':
-					print(curr['col'])
-					raise Err('E_COL_ALNUM')
-
-				col_name = curr['col'].dat
-				col_alias = f"{tab_alias}.{col_name}"
+				elif not curr['col']: raise Err('E_COL_NONE')
+				elif curr['col'].kind=='ALNUM': col_alias = tab_alias + '.' + curr['col'].dat
+				else: raise Err('E_COL_ALNUM')
 
 				# VAL
 				if prev['val']: bind[SAME]=prev['val']
@@ -597,10 +597,13 @@ class MemePGSQL(Meme):
 				select = SQLUtil.select(valaxis, bind)
 				selects.append(select)
 
-				if any(t.lex=='grp' for t in valaxis[L][R:]): groups.append(select)
-				if any(t.lex=='asc' for t in valaxis[L][R:]): ords.append((select[0]+' ASC', select[1], select[2]))
-				elif any(t.lex=='dsc' for t in valaxis[L][R:]): ords.append((select[0]+' DESC', select[1], select[2]))
+				# AGG/SORT
+				funcs = set(t.lex for t in valaxis[L][R:])
+				if 'grp' in funcs: groups.append(select)
+				if 'asc' in funcs: ords.append((select[0]+' ASC', select[1], select[2]))
+				elif 'dsc' in funcs: ords.append((select[0]+' DESC', select[1], select[2]))
 
+				# HAVING
 				where = SQLUtil.where(valaxis, bind)
 				if where[0]:
 					if where[2]==AHAV: havings.append(where)
@@ -635,6 +638,6 @@ class MemePGSQL(Meme):
 
 if __name__ == "__main__":
 	if len(sys.argv)!=2: raise Err('E_ARG')
-	meme = MemePGSQL(sys.argv[1]).check()
+	meme = MemePGSQL(sys.argv[1])
 	print(str(meme))
 	print(meme.select())
