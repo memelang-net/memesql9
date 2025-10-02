@@ -1,7 +1,7 @@
 '''
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
-MEMELANG USES AMES ORDERED HIGH TO LOW
+MEMELANG USES AXES ORDERED HIGH TO LOW
 ALWAYS WHITESPACE MEANS "NEW AXIS"
 NEVER SPACE AROUND OPERATOR
 NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
@@ -283,12 +283,13 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 				if tokens.peek()=='OR':
 					tokens.next()
 					if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
+				if tokens.peek() == MODE: raise Err('E_RIGHT_MODE')
 
 			if axis.opr.kind in VOCAB[mode]['CMP'] and not axis[R]: raise Err('E_CMP_RIGHT')
 
 		if axis[L]:	
 			axis[L], axis[R] = axis[L].check(), axis[R].check()
-			vec.prepend(axis.check()) # AMES HIGH->LOW
+			vec.prepend(axis.check()) # AXES HIGH->LOW
 			continue
 
 		# VECTOR
@@ -488,7 +489,7 @@ class SQLUtil():
 
 	@staticmethod
 	def select(axis: Axis, bind: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		agg_func = {'cnt':'SUM(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
+		agg_func = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
 		agg = ANONE
 		sqlterm, sqlparams = SQLUtil.term(axis[L][L], bind)
 		for t in axis[L][R:]:
@@ -637,7 +638,17 @@ class MemePGSQL(Meme):
 ### CLI ###
 
 if __name__ == "__main__":
-	if len(sys.argv)!=2: raise Err('E_ARG')
-	meme = MemePGSQL(sys.argv[1])
-	print(str(meme))
-	print(meme.select())
+	if len(sys.argv)==2:
+		meme = MemePGSQL(sys.argv[1])
+		print(str(meme))
+		print(meme.select())
+	elif len(sys.argv)==3 and sys.argv[1]=='file':
+		with open(sys.argv[2], 'r', encoding='utf-8') as f: data = json.load(f)
+		for idx, example in enumerate(data['examples']):
+			print(f"{idx} {example['natlang']}")
+			meme = MemePGSQL(example['memelang'])
+			print(str(meme))
+			print(meme.select())
+			print()
+		print('SUCCESS')
+	else: raise Err('E_ARG')
