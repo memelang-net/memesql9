@@ -2,12 +2,14 @@
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
 MEMELANG USES AXES ORDERED HIGH TO LOW
-ALWAYS WHITESPACE MEANS "NEW AXIS"
+ONE MORE OR WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
+EXAMPLE: AXIS3 AXIS2 AXIS1 AXIS0
 NEVER SPACE AROUND OPERATOR
 NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
+EXAMPLE: roles _ actor "Mark Hamill"; rating >4; <5; movie _; !@ @ @; actor _;;
 '''
 
-MEMELANG_VER = 9.25
+MEMELANG_VER = 9.26
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -23,7 +25,7 @@ TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
 	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EMOTIC CHARS "John \"Jack\" Kennedy"
 	('MTBL',		r'-*\|'),
-	('EMB',			r'\[(?:-?\d+(?:\.\d+)?)(?:,-?\d+(?:\.\d+)?)*\]'), # JSON ARRAY OF DECS [0.1,0.2]
+	('EMB',			r'\[(?:-?\d+(?:\.\d+)?)(?:\s*,\s*-?\d+(?:\.\d+)?)*\]'), # JSON ARRAY OF DECS [0.1,0.2]
 	('POW',			r'\*\*'),
 	('MUL',			r'\*'),
 	('ADD',			r'\+'),
@@ -84,7 +86,7 @@ VOCAB = {
 
 EBNF = '''
 TERM ::= DAT [MOD DAT]
-LEFT ::= TERM {SF VAR|ALNUM}
+LEFT ::= [MOD DAT] {SF VAR|ALNUM}
 RIGHT ::= TERM {OR TERM}
 AXIS ::= LEFT [CMP RIGHT]
 VEC ::= [MODE] AXIS {SA AXIS}
@@ -155,10 +157,14 @@ class Node(list):
 	def check(self) -> 'Node': 
 		if len(self)==0: raise Err('E_NODE_LIST')
 		return self
+	@property
 	def iter(self): return iter(self)
+	@property
 	def prefix(self) -> Memelang: return ''
+	@property
 	def suffix(self) -> Memelang: return ''
-	def __str__(self) -> Memelang: return self.prefix() + self.opr.lex.join([s for s in map(str, self.iter()) if s]) + self.suffix()
+	
+	def __str__(self) -> Memelang: return self.prefix + self.opr.lex.join([s for s in map(str, self.iter) if s]) + self.suffix
 
 	@property
 	def kinds(self) -> List[str]:
@@ -210,7 +216,9 @@ class Axis(Node):
 class Vector(Node):
 	opr: Token = TOK_SA
 	mode: str = Q
+	@property
 	def iter(self): return reversed(self)
+	@property
 	def prefix(self) -> Memelang: return '' if self.mode == Q else (self.mode + SA)
 
 
@@ -283,7 +291,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 				if tokens.peek()=='OR':
 					tokens.next()
 					if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
-				if tokens.peek() == MODE: raise Err('E_RIGHT_MODE')
+				if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
 
 			if axis.opr.kind in VOCAB[mode]['CMP'] and not axis[R]: raise Err('E_CMP_RIGHT')
 
@@ -344,20 +352,33 @@ class Meme(Node):
 		self.check()
 
 	def check(self) -> 'Meme':
-		for mat_idx, mat in enumerate(self):
+		for mat in self:
 			if not isinstance(mat, Matrix): raise TypeError('E_TYPE_MAT')
-			for vec_idx, vec in enumerate(mat):
+			for vec in mat:
 				if not isinstance(vec, Vector): raise TypeError('E_TYPE_VEC')
-				for axis_idx, axis in enumerate(vec):
+				for axis in vec:
 					if not isinstance(axis, Axis): raise TypeError('E_TYPE_AXIS')
-					# DO VAR BIND HERE
-			axis=Axis(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
-			axis.opr=Token('EQL',ELIDE)
-			self[mat_idx].pad(axis)
+			pad_axis=Axis(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
+			pad_axis.opr=Token('EQL',ELIDE)
+			mat.pad(pad_axis)
 
 		return self
 
+	@property
 	def suffix(self) -> Memelang: return SM
+
+	def embed(self):
+		for mat in self:
+			for vec in mat:
+				for axis in vec:
+					for bucket in (axis[L][0:1], axis[R]):
+						for term in bucket:
+							if term.opr.kind in {'COS','L2','IP'} and len(term)==2 and term[R].kind in {'QUOT','ALNUM'}: term[R] = self.embedify(term[R])
+
+	# OVERWRITE WITH YOUR EMBEDDING FUNCTION
+	def embedify(self,tok: Token) -> Token:
+		if tok.kind not in {'QUOT','ALNUM'}: raise Err('E_EMBED')
+		return Token('EMB', '[0.1,0.2]')
 
 
 # GENERATE RANDOM MEMELANG DATA
@@ -371,13 +392,13 @@ class Fuzz():
 		if kind=='EMB': return '[' + ','.join([str(random.uniform(0,1)) for _ in range(4)]) + ']'
 
 	@staticmethod
-	def lterm(mode: str) -> Memelang:
-		term = ''
-		if mode=='VEC': term += random.choice(['<=>','<->','<#>']) + Fuzz.dat('EMB') 
-		return term
+	def left(mode: str) -> Memelang:
+		left = ''
+		if mode=='VEC': left += random.choice(['<=>','<->','<#>']) + Fuzz.dat('EMB') 
+		return left
 
 	@staticmethod
-	def rterm(mode: str) -> Memelang:
+	def term(mode: str) -> Memelang:
 		if mode=='NUM':
 			term = Fuzz.dat('DEC')
 			if random.randint(0,1): term += random.choice(['+','-','*','/']) + Fuzz.dat('DEC')
@@ -386,12 +407,12 @@ class Fuzz():
 		return term
 
 	@staticmethod
-	def junc(mode: str) -> Memelang:
-		if mode=='STR': return OR.join(Fuzz.rterm(mode) for _ in range(random.randint(1,5)))
-		else: return Fuzz.rterm(mode)
+	def right(mode: str) -> Memelang:
+		if mode=='STR': return OR.join(Fuzz.term(mode) for _ in range(random.randint(1,5)))
+		else: return Fuzz.term(mode)
 
 	@staticmethod
-	def limit(bind: List[str]|None = None) -> Memelang:
+	def axis(bind: List[str]|None = None) -> Memelang:
 		if not bind: bind = []
 
 		mode: str
@@ -402,19 +423,19 @@ class Fuzz():
 		if comp in {'<','<=','>','>='}: mode = 'NUM' if random.randint(0, 3) else 'VEC'
 		else: mode='STR'
 
-		return Fuzz.lterm(mode) + comp + Fuzz.junc(mode)
+		return Fuzz.left(mode) + comp + Fuzz.right(mode)
 
 	@staticmethod
-	def vector(limit_len:int = 4) -> Memelang:
+	def vector(axis_len:int = 4) -> Memelang:
 		bind, vector = [], []
-		for i in range(limit_len):
+		for i in range(axis_len):
 			if i>0: bind.append(SAME)
-			vector.append(Fuzz.limit(bind))
+			vector.append(Fuzz.axis(bind))
 		return SA.join(vector)
 
 	@staticmethod
 	def mat_table(col_len:int = 5) -> Memelang:
-		return Fuzz.dat('ALNUM') + SA + VAL + SA + SV.join(Fuzz.dat('ALNUM') + SA + Fuzz.limit() for _ in range(col_len)) + SM
+		return Fuzz.dat('ALNUM') + SA + VAL + SA + SV.join(Fuzz.dat('ALNUM') + SA + Fuzz.axis() for _ in range(col_len)) + SM
 
 
 
@@ -435,180 +456,190 @@ MEMELANG: roles _ actor "Mark Hamill"; movie _; !@ @ @; actor _;;
 SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id!=t0.id AND t1.movie = t0.movie;
 
 4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
-MEMELANG: actors _ age >21; name _; roles _ title @;;
-MEMELANG(2): actors _ age >21; name:$n; roles _ title $n;;
-SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t1.title = t0.name;
+MEMELANG: actors _ age >21; <30; name _; roles _ title @;;
+MEMELANG(2): actors _ age >21; <30; name:$n; roles _ title $n;;
+SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t0.age < 30 AND t1.title = t0.name;
 
 5. EXAMPLE EMBEDDING
-MEMELANG: movies _ description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
-SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3], t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3] DESC LIMIT 10 OFFSET 100;
+MEMELANG: movies _ description <=>"war":dsc>0.5; year >2005; %m lim 10; beg 100;;
+MEMELANG(2): movies _ description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
+SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3]::VECTOR, t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]::VECTOR>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3]::VECTOR DESC LIMIT 10 OFFSET 100;
 
 6. EXAMPLE AGGREGATION
 MEMELANG: roles _ rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
 SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
 '''
 
-SQL = str
-Param = int|float|str|list
-Agg = int
 ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
+PH = '%s'
+EPH = ' = %s'
 
-class SQLUtil():
+class SQL():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
+	lex: str
+	alias: str
+	params: List[Union[int, float, str, list]]
+	agg: int|None
+
+	def __init__(self, lex: str = '', params: List[Union[int, float, str, list]] = None, agg: int = ANONE, alias: str = ''):
+		self.lex = lex
+		self.agg = agg
+		self.alias = alias
+		self.params = [] if params is None else params
 
 	@staticmethod
-	def holder(token: Token, bind: dict) -> SQL:
-		if token.kind=='DBCOL': return token.dat
-		elif token.kind=='VAL': return SQLUtil.holder(bind[VAL], bind)
-		elif token.kind=='SAME': return SQLUtil.holder(bind[SAME], bind)
-		elif token.kind=='VAR':
-			if token.lex not in bind: raise Err('E_VAR_BIND')
-			return SQLUtil.holder(bind[token.lex], bind)
-		return '%s'
+	def dat(token: Token, bind: dict) -> 'SQL':
+		if token.kind in {'VAL','SAME','MSAME','VAR'}:
+			if token.delide not in bind: raise Err('E_VAR_BIND')
+			return bind[token.delide] if bind[token.delide] else SQL()
+		return SQL(PH, [token.dat], ACNST)
 
 	@staticmethod
-	def param(token: Token, bind: dict) -> None|Param:
-		if token.kind=='DBCOL': return None
-		elif token.kind=='VAL': return SQLUtil.param(bind[VAL], bind)
-		elif token.kind=='SAME': return SQLUtil.param(bind[SAME], bind)
-		elif token.kind=='VAR':
-			if token.lex not in bind: raise Err('E_VAR_BIND')
-			return SQLUtil.param(bind[token.lex], bind)
-		return token.dat
+	def term(term: Term, bind: dict) -> 'SQL':
+		if not term: return SQL()
+		dats = [SQL.dat(t, bind) for t in term]
+		return SQL(term.opr.lex.join(dat.lex for dat in dats), [p for dat in dats for p in dat.params])
 
 	@staticmethod
-	def term(term: Term, bind: dict) -> Tuple[SQL, List[None|Param]]:
-		sqlterm = SQLUtil.holder(term[0], bind)
-		sqlparams = [SQLUtil.param(term[0], bind)]
-		if term.opr.kind!='SEP_TOK':
-			sqlterm += term.opr.lex + SQLUtil.holder(term[1], bind)
-			sqlparams.append(SQLUtil.param(term[1], bind))
-
-		return sqlterm, sqlparams
+	def single(axis: Axis, bind: dict) -> 'SQL':
+		return SQL() if axis.single.dat is None else SQL.dat(axis.single, bind)
 
 	@staticmethod
-	def select(axis: Axis, bind: dict) -> Tuple[SQL, List[None|Param], Agg]:
+	def select(axis: Axis, bind: dict, alias: str = '') -> 'SQL':
 		agg_func = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
-		agg = ANONE
-		sqlterm, sqlparams = SQLUtil.term(axis[L][L], bind)
+		left = SQL.term(axis[L][L], bind)
 		for t in axis[L][R:]:
 			if t.lex in agg_func:
-				if agg: raise Err('E_DBL_AGG')
-				agg = AHAV
-				sqlterm = agg_func[t.lex] + ('' if '(1)' in agg_func[t.lex] else '(' + sqlterm + ')')
-			elif t.lex=='grp': agg = AGRP
+				if left.agg == AHAV: raise Err('E_DBL_AGG')
+				left.agg = AHAV
+				left.lex = agg_func[t.lex] + ('' if '(1)' in agg_func[t.lex] else '(' + left.lex + ')')
+			elif t.lex=='grp': left.agg = AGRP
 			# TO DO: FLAG CONFLICTS
-		return sqlterm, sqlparams, agg
+		if alias: left.alias=alias
+		return left
 		
 	@staticmethod
-	def where(axis: Axis, bind: dict) -> Tuple[SQL, List[None|Param], Agg]:
-		if axis.opr.kind=='SEP_PASS': return '', [], ANONE
-		sym = SQLUtil.cmp2sql[axis.opr.kind]
-		lp, rp, junc, ts = '', '', '', []
+	def where(axis: Axis, bind: dict) -> 'SQL':
+		if axis.opr.kind=='SEP_PASS': return SQL()
+		sym = SQL.cmp2sql[axis.opr.kind]
+		lp, rp, right, ts = '', '', '', []
+		params = []
 
 		if len(axis[R]) > 1:
 			lp, rp = '(', ')'
-			junc = ' AND ' if axis.opr.kind=='NOT' else ' OR '
+			right = ' AND ' if axis.opr.kind=='NOT' else ' OR '
 
-		leftsql, params, agg = SQLUtil.select(axis, bind)
+		select = SQL.select(axis, bind)
+		params.extend(select.params)
 		for t in axis[R]:
-			sql, subparams = SQLUtil.term(t, bind)
-			if sym in ('LIKE','ILIKE'): sql = sql.replace('%s', "CONCAT('%', %s, '%')", 1)
-			ts.append(f"{leftsql} {sym} {sql}")
-			params.extend(subparams)
+			where = SQL.term(t, bind)
+			if sym in ('LIKE','ILIKE'): where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')", 1)
+			ts.append(f"{select.lex} {sym} {where.lex}")
+			params.extend(where.params)
 
-		return lp + junc.join(ts) + rp, params, agg
+		return SQL(lp + right.join(ts) + rp, params, select.agg)
 
+	@property
+	def holder(self) -> str:
+		return self.lex + ( '' if not self.alias else f' AS "{self.alias}"')
+
+	@property
+	def param(self):
+		return None if self.lex!=PH or len(self.params)!=1 else self.params[0]
+
+	def __str__(self) -> str:
+		sql = self.lex
+		if self.alias: sql += f' AS "{self.alias}"'
+		for p in self.params:
+			if isinstance(p, str): v = "'" + p.replace("'", "''") + "'"
+		elif isinstance(p, list): v = json.dumps(p, separators=(',',':')) + '::VECTOR'
+			elif p is None: v = 'NULL'
+			else: v = str(p)
+			sql = sql.replace(PH, v, 1)
+		return sql
+
+	def __eq__(self, other): return isinstance(other, SQL) and str(self)==str(other)
 
 # TRANSLATE TO POSTGRES
 class MemePGSQL(Meme):
-	def select(self) -> List[Tuple[SQL, List[Param]]]:
+	def select(self) -> List[SQL]:
+		self.embed()
 		tab_idx: int = 0
-		sql: List[Tuple[SQL, List[Param]]] = []
+		sql: List[SQL] = []
 		axes = ('val','col','row','tab')
 
 		for mat in self:
-			selectall = False
-			tab_alias = None
-			limstr = ''
+			sel_all, tab_alias, pri_col = False, None, None
 			froms, wheres, selects, ords, groups, havings, bind = [], [], [], [], [], [], {}
 			prev = {name:None for name in axes}
 			config = {M: {'val':0,'col':1,'row':2,'tab':3,'lim':0,'beg':0,'pri':'id'}}
 
-			# CONFIG VECTORS
-			# ; %m lim 10; beg 100
 			for vec in mat:
-				if vec.mode!=M: continue
-				if len(vec)!=2: raise Err('E_X_LEN')
-				key, val = vec[1].single, vec[0].single
-				if key.lex in config[M] and isinstance(val.dat, type(config[M][key.lex])): config[M][key.lex] = val.dat
-				else: raise Err('E_MODE_KEY')					
 
-			# QUERY VECTORS
-			# tab row col term:meta>term,term;
-			for vec in mat:
+				# META VECTORS
+				# ; %m lim 10; beg 100
+				if vec.mode==M:
+					if len(vec)!=2: raise Err('E_X_LEN')
+					key, val = vec[1].single, vec[0].single
+					if key.lex in config[M] and isinstance(val.dat, type(config[M][key.lex])): config[M][key.lex] = val.dat
+					else: raise Err('E_MODE_KEY')
+					continue
+
+				# QUERY VECTORS
+				# tab row col term:func:func>term,term;
 				if vec.mode!=Q: continue
 				if len(vec)<4: raise Err('E_Q_LEN')
 
-				bind[VAL]=None
 				curr = {name: None for name in axes}
-				for name in axes:
-					axis = vec[config[M][name]]
-					bind[SAME] = prev[name]
-					curr[name] = bind[axis.single.delide] if axis.single.delide in bind else axis.single
+				
+				# TAB
+				bind[VAL],bind[SAME]=None, prev['tab']
+				curr['tab'] = SQL.single(vec[config[M]['tab']], bind)
 
-				bind[SAME] = None
-				colaxis = vec[config[M]['col']]
-				valaxis = vec[config[M]['val']]
+				# ROW
+				bind[SAME],bind[VAL] = None, prev['row']
+				curr['row'] = SQL.single(vec[config[M]['row']], bind)
 
 				# JOIN
-				if prev['tab']!=curr['tab'] or prev['row']!=curr['row']:
-
-					if selectall: selects.append((f'{tab_alias}.*', [], ANONE))
-					selectall = False
-
-					# TAB
-					if not curr['tab'] or curr['tab'].kind!='ALNUM': raise Err('E_TBL_ALNUM')
+				if prev['tab']!=curr['tab'] or not curr['row'].lex or prev['row']!=curr['row']:
+					if curr['tab'].param is None: raise Err('E_TBL_NAME')
 					tab_alias = f't{tab_idx}'
-					froms.append(f"{curr['tab']} AS {tab_alias}")
 					tab_idx += 1
-					pricol = f"{tab_alias}.{config[M]['pri']}"
+					#selects.append(curr['tab'])
+					froms.append(SQL(curr['tab'].param, [], ACNST, tab_alias))
 
-					# ROW
-					bind[SAME]=prev['row'] if prev['row'] is not None else None
-					curr['row']=bind[VAL]=Token('DBCOL', pricol)
-					where, param, _ = SQLUtil.where(vec[config[M]['row']], bind)
-					if where: wheres.append((where, param, ANONE))
-
-					selects.extend([(f"'{curr['tab'].lex}' AS _tab", [], ACNST), (f"{pricol} AS _row", [], ANONE)])
+					bind[SAME]=prev['row']
+					curr['row']=bind[VAL]=SQL(f"{tab_alias}.{config[M]['pri']}")
+					selects.append(SQL.select(vec[config[M]['row']], bind))
+					wheres.append(SQL.where(vec[config[M]['row']], bind))
 
 				# COL
-				if colaxis.single.kind=='VAL':
-					selectall=True
+				if vec[config[M]['col']].single.kind=='VAL':
+					sel_all=True
 					continue
-				elif not curr['col']: raise Err('E_COL_NONE')
-				elif curr['col'].kind=='ALNUM': col_alias = tab_alias + '.' + curr['col'].dat
-				else: raise Err('E_COL_ALNUM')
+
+				bind[SAME], bind[VAL] = prev['col'], None
+				curr['col'] = SQL.single(vec[config[M]['col']], bind)
+				if curr['col'].param is None: raise Err('E_COL_NAME')
+				#selects.append(curr['col'])
 
 				# VAL
-				if prev['val']: bind[SAME]=prev['val']
-				curr['val']=bind[VAL]=Token('DBCOL', col_alias)
+				bind[SAME]=prev['val']
+				bind[VAL]=SQL(tab_alias + '.' + curr['col'].params[0])
+				curr['val'] = SQL.single(vec[config[M]['val']], bind)
+				wheres.append(SQL.where(vec[config[M]['val']], bind))
 
-				select = SQLUtil.select(valaxis, bind)
+				select = SQL.select(vec[config[M]['val']], bind, f"{tab_alias}.{curr['col'].param}")
 				selects.append(select)
+				#selects.append(SQL("';'", [], ACNST))
 
 				# AGG/SORT
-				funcs = set(t.lex for t in valaxis[L][R:])
+				funcs = set(t.lex for t in vec[config[M]['val']][L][R:])
 				if 'grp' in funcs: groups.append(select)
-				if 'asc' in funcs: ords.append((select[0]+' ASC', select[1], select[2]))
-				elif 'dsc' in funcs: ords.append((select[0]+' DESC', select[1], select[2]))
+				if 'asc' in funcs: ords.append(SQL(select.lex+' ASC', select.params, ANONE))
+				elif 'dsc' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
 
-				# HAVING
-				where = SQLUtil.where(valaxis, bind)
-				if where[0]:
-					if where[2]==AHAV: havings.append(where)
-					else: wheres.append(where)
-			
+				# BIND VARS			
 				for name in axes:
 					for t in vec[config[M][name]][L][R:]:
 						if t.kind=='VAR': bind[t.lex]=curr[name]
@@ -616,20 +647,30 @@ class MemePGSQL(Meme):
 				prev = curr.copy()
 
 			if groups: 
-				if selectall: raise Err('E_SLCTALL_AGRP')
-				selects = [s for s in selects if s[2]>ANONE]
-			elif selectall: selects.append((f'{tab_alias}.*', [], ANONE))
+				if sel_all: raise Err('E_SELALL_GRP')
+				selects = [s for s in selects if s.agg>ANONE]
+			elif sel_all: selects.append(SQL(f'{tab_alias}.*', [], ANONE))
 
-			selectstr = 'SELECT ' + ', '.join([s[0] for s in selects if s[0]])
-			fromstr = ' FROM ' + ', '.join(froms)
-			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join([s[0] for s in wheres if s[0]])
-			groupstr = '' if not groups else ' GROUP BY ' + ', '.join([s[0] for s in groups if s[0]])
-			havingstr = '' if not havings else ' HAVING ' + ' AND '.join([s[0] for s in havings if s[0]])
-			ordstr = '' if not ords else ' ORDER BY ' + ', '.join([s[0] for s in ords if s[0]])
-			if config[M]['lim']: limstr += f" LIMIT {config[M]['lim']}"
-			if config[M]['beg']: limstr += f" OFFSET {config[M]['beg']}"
-			params = [p for s in selects+wheres+groups+havings+ords for p in s[1] if p is not None]
-			sql.append((selectstr + fromstr + wherestr + groupstr + havingstr + ordstr + limstr, params))
+			SQLPARTS=[
+				['SELECT', ', ', selects, True],
+				['FROM', ', ', froms, True],
+				['WHERE', ' AND ', [p for p in wheres if p.agg<AHAV], False],
+				['GROUP BY', ', ', groups, False],
+				['HAVING', ' AND ', [p for p in wheres if p.agg==AHAV], False],
+				['ORDER BY', ', ', ords, False]
+			]
+
+			sqlstr,space,params='','',[]
+			for keyword, sep, items, usealias in SQLPARTS:
+				if not items: continue
+				sqlstr+=space+keyword+' '+sep.join([(s.holder if usealias else s.lex)  for s in items if s.lex])
+				params.extend(p for s in items for p in s.params if p is not None)
+				space = ' '
+
+			if config[M]['lim']: sqlstr += f" LIMIT {config[M]['lim']}"
+			if config[M]['beg']: sqlstr += f" OFFSET {config[M]['beg']}"
+
+			sql.append(SQL(sqlstr, params))
 
 		return sql
 
@@ -644,11 +685,11 @@ if __name__ == "__main__":
 	elif len(sys.argv)==3 and sys.argv[1]=='file':
 		with open(sys.argv[2], 'r', encoding='utf-8') as f: data = json.load(f)
 		for idx, example in enumerate(data['examples']):
-			print(f"{idx} {example['input']}")
+			print(f"{idx}. {example['input']}")
 			print(example['output'])
 			meme = MemePGSQL(example['output'])
 			print(str(meme))
-			print(meme.select())
+			print(str(meme.select()[0]))
 			print()
 		print('SUCCESS')
 	else: raise Err('E_ARG')
