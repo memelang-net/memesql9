@@ -7,7 +7,7 @@ NEVER SPACE AROUND OPERATOR
 NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.23
+MEMELANG_VER = 9.24
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -586,13 +586,10 @@ class MemePGSQL(Meme):
 				bind[VAL]=None
 				curr = {name: None for name in axes}
 				for name in axes:
-					axis = vec[config[M][name]]
 					bind[SAME] = prev[name]
-					curr[name] = bind[axis.single.delide] if axis.single.delide in bind else axis.single
+					curr[name] = SQLUtil.select(vec[config[M][name]], bind)
 
 				bind[SAME] = None
-				colaxis = vec[config[M]['col']]
-				valaxis = vec[config[M]['val']]
 
 				# JOIN
 				if prev['tab']!=curr['tab'] or prev['row']!=curr['row']:
@@ -601,34 +598,34 @@ class MemePGSQL(Meme):
 					selectall = False
 
 					# TAB
-					if not curr['tab'] or curr['tab'].kind!='ALNUM': raise Err('E_TBL_ALNUM')
+					if not curr['tab'][0] or curr['tab'][0]!='%s': raise Err('E_TBL_ALNUM')
 					tab_alias = f't{tab_idx}'
-					froms.append(f"{curr['tab']} AS {tab_alias}")
+					froms.append((f"{curr['tab'][0]} AS {tab_alias}", curr['tab'][1], ACNST))
+					selects.append((f"{curr['tab'][0]} AS _tab", curr['tab'][1], ACNST))
 					tab_idx += 1
-					pricol = f"{tab_alias}.{config[M]['pri']}"
 
 					# ROW
-					bind[SAME]=prev['row'] if prev['row'] is not None else None
-					curr['row']=bind[VAL]=Token('DBCOL', pricol)
+					pricol = f"{tab_alias}.{config[M]['pri']}"
+					bind[VAL]=Token('DBCOL', pricol)
+					selects.append((f"{curr['row'][0]} AS _row", curr['row'][1], ANONE))
 					where, param, _ = SQLUtil.where(vec[config[M]['row']], bind)
 					if where: wheres.append((where, param, ANONE))
 
-					selects.extend([(f"'{curr['tab'].lex}' AS _a3", [], ACNST), (f"{pricol} AS _a2", [], ANONE)])
-
 				# COL
-				if colaxis.single.kind=='VAL':
+				if vec[config[M]['col']].single.kind=='VAL':
 					selectall=True
 					continue
 				elif not curr['col']: raise Err('E_COL_NONE')
-				elif curr['col'].kind=='ALNUM': col_alias = tab_alias + '.' + curr['col'].dat
+				elif curr['col'].kind=='ALNUM': col_alias = tab_alias + '.' + curr['col'][1]
 				else: raise Err('E_COL_ALNUM')
 
 				# VAL
-				if prev['val']: bind[SAME]=prev['val']
-				curr['val']=bind[VAL]=Token('DBCOL', col_alias)
+				bind[SAME]=prev['val']
+				bind[VAL]=Token('DBCOL', col_alias)
 
+				valaxis = vec[config[M]['val']]
 				select = SQLUtil.select(valaxis, bind)
-				selects.append(select)
+				selects.append(curr['val'])
 
 				# AGG/SORT
 				funcs = set(t.lex for t in valaxis.funcs)
@@ -636,7 +633,7 @@ class MemePGSQL(Meme):
 				if 'asc' in funcs: ords.append((select[0]+' ASC', select[1], select[2]))
 				elif 'dsc' in funcs: ords.append((select[0]+' DESC', select[1], select[2]))
 
-				# HAVING
+				# WHERE/HAVING
 				where = SQLUtil.where(valaxis, bind)
 				if where[0]:
 					if where[2]==AHAV: havings.append(where)
@@ -654,7 +651,7 @@ class MemePGSQL(Meme):
 			elif selectall: selects.append((f'{tab_alias}.*', [], ANONE))
 
 			selectstr = 'SELECT ' + ', '.join([s[0] for s in selects if s[0]])
-			fromstr = ' FROM ' + ', '.join(froms)
+			fromstr = ' FROM ' + ', '.join([s[0] for s in froms if s[0]])
 			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join([s[0] for s in wheres if s[0]])
 			groupstr = '' if not groups else ' GROUP BY ' + ', '.join([s[0] for s in groups if s[0]])
 			havingstr = '' if not havings else ' HAVING ' + ' AND '.join([s[0] for s in havings if s[0]])
@@ -665,7 +662,7 @@ class MemePGSQL(Meme):
 			if config[M]['beg']:
 				limstr += f" OFFSET %s"
 				ords.append(('', [int(config[M]['beg'])]))
-			params = [p for s in selects+wheres+groups+havings+ords for p in s[1] if p is not None]
+			params = [p for s in froms+selects+wheres+groups+havings+ords for p in s[1] if p is not None]
 			sql.append((selectstr + fromstr + wherestr + groupstr + havingstr + ordstr + limstr, params))
 
 		return sql
@@ -681,9 +678,9 @@ if __name__ == "__main__":
 	elif len(sys.argv)==3 and sys.argv[1]=='file':
 		with open(sys.argv[2], 'r', encoding='utf-8') as f: data = json.load(f)
 		for idx, example in enumerate(data['examples']):
-			print(f"{idx} {example['natlang']}")
-			print(f"{example['memelang']}")
-			meme = MemePGSQL(example['memelang'])
+			print(f"{idx} {example['input']}")
+			print(f"{example['output']}")
+			meme = MemePGSQL(example['output'])
 			print(str(meme))
 			print(meme.select())
 			print()
