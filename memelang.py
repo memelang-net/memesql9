@@ -7,7 +7,7 @@ NEVER SPACE AROUND OPERATOR
 NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.24
+MEMELANG_VER = 9.25
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -53,26 +53,27 @@ TOKEN_KIND_PATTERNS = (
 	('SV',			re.escape(SV)),
 	('OR',			re.escape(OR)),
 	('SA',			r'\s+'),
-	('MISMATCH',	r'.')
+	('MISMATCH',	r'.'),
 )
 
 MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN_KIND_PATTERNS))
 
 IGNORE_KINDS = {'COMMENT','MTBL'}
-FUNC_KINDS = {'ALNUM','VAR'}
 DELIDE = {'SAME':SAME,'MSAME':MSAME,'VAL': VAL,'EQL': '='}
 
 D, Q, M = MODE+'d', MODE+'q', MODE+'m'
 VOCAB = {
 	D: { # DDL
-		'CMP': {'EQL','NOT','GT','GE','LT','LE','TYP','ROL','DESC'},
+		'CMP': {'EQL','NOT','GT','GE','LT','LE'},
 		'MOD': {},
-		'DAT': {'ALNUM','QUOT','INT','DEC','SAME','MSAME','VAL'}
+		'DAT': {'ALNUM','QUOT','INT','DEC','SAME','MSAME','VAL'},
+		'FUNC': {'TYP','ROL','DESC'}
 	},
 	Q: { # DQL
 		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR'},
 		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
-		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','VAL','EMB'}
+		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','VAL','EMB'},
+		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt"}
 	},
 	M: { # META
 		'CMP': {'EQL'},
@@ -83,10 +84,9 @@ VOCAB = {
 
 EBNF = '''
 TERM ::= DAT [MOD DAT]
-LEFT ::= [MOD DAT] {SF VAR|ALNUM}
+LEFT ::= TERM {SF VAR|ALNUM}
 RIGHT ::= TERM {OR TERM}
-LIMIT ::= [LEFT CMP] RIGHT
-AXIS ::= LIMIT [CMP RIGHT]
+AXIS ::= LEFT [CMP RIGHT]
 VEC ::= [MODE] AXIS {SA AXIS}
 MAT ::= VEC {SV VEC}
 MEME ::= MAT {SM MAT}
@@ -171,16 +171,7 @@ class Node(list):
 class Term(Node):
 	opr: Token = TOK_SEP_TOK
 
-TERM_ELIDE = Term(Token('NULL',ELIDE))
-
-
-# TERM {FUNC VAR|ALNUM}
-class Left(Node): 
-	opr: Token = TOK_SF
-	def check(self) -> 'Left':
-		if len(self) and not isinstance(self[0], Term): raise Err('E_LEFT_TERM')
-		if len(self)>1 and any(t.kind not in {'ALNUM','VAR'} for t in self[1:]): raise Err('E_LEFT_FUNC')
-		return self
+TERM_ELIDE = Term(Token('VAL',ELIDE))
 
 
 # TERM {OR TERM}
@@ -191,39 +182,35 @@ class Right(Node):
 		return self
 
 
-# LEFT CMP RIGHT
-class Limit(Node):
-	opr: Token = TOK_SEP_PASS
-	def check(self) -> 'Limit': 
-		if len(self)!=2: raise Err('E_NODE_LIST')
-		if not isinstance(self[0], Left): raise Err('E_LIMIT_LEFT')
-		if not isinstance(self[1], Right): raise Err('E_LIMIT_RIGHT')
-		if (self.opr.kind!='SEP_PASS') ^ bool(self[R]): raise Err('E_LIMIT_CMP_RIGHT')
+# TERM {FUNC VAR|ALNUM}
+class Left(Node): 
+	opr: Token = TOK_SF
+	def check(self) -> 'Left':
+		if not len(self): raise Err('E_NODE_LIST')
+		if not isinstance(self[0], Term): raise Err('E_LEFT_TERM')
+		if len(self)>1 and any(t.kind not in {'ALNUM','VAR'} for t in self[1:]): raise Err('E_LEFT_FUNC')
 		return self
 
-# LIMIT CMP RIGHT
+
+# LEFT CMP RIGHT
 class Axis(Node):
 	opr: Token = TOK_SEP_PASS
-	def check(self) -> 'Limit': 
+	def check(self) -> 'Axis': 
 		if len(self)!=2: raise Err('E_NODE_LIST')
-		if not isinstance(self[0], Limit): raise Err('E_AXIS_LIMIT')
+		if not isinstance(self[0], Left): raise Err('E_AXIS_LEFT')
 		if not isinstance(self[1], Right): raise Err('E_AXIS_RIGHT')
-		if (self.opr.kind!='SEP_PASS') ^ bool(self[R]): raise Err('E_AXIS_CMP_RIGHT')
 		return self
 	@property
 	def single(self) -> Token:
-		if self.opr.kind != 'SEP_PASS' or self[R]: return TOK_NULL
-		if self[L].opr.kind != 'EQL' or len(self[L][R])!=1 or len(self[L][R][L])!=1: return TOK_NULL
-		return self[L][R][L][L]
-	@property
-	def funcs(self) -> List[Token]: return self[L][L][R:]
+		if self.opr.kind == 'SEP_PASS': return Token('VAL', VAL)
+		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
 
 
 # AXIS {SA AXIS}
 class Vector(Node):
 	opr: Token = TOK_SA
 	mode: str = Q
-	def iter(self): return reversed(self) # AXES HIGH->LOW
+	def iter(self): return reversed(self)
 	def prefix(self) -> Memelang: return '' if self.mode == Q else (self.mode + SA)
 
 
@@ -240,9 +227,11 @@ class Matrix(Node):
 			elif diff<0: raise Err('E_FIRST_VECTOR_MUST_BE_LONGEST')
 
 
+
 def lex(src: Memelang) -> Iterator[Token]:
 	for m in MASTER_PATTERN.finditer(src):
 		kind = m.lastgroup
+		if kind=='TOK': kind = m.group()[1:-1]
 		if kind in IGNORE_KINDS: continue
 		if kind=='MISMATCH': raise Err('E_TOK')
 		yield Token(kind, m.group())
@@ -256,7 +245,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 	while tokens.peek():
 
 		# AXIS
-		axis = Axis(Limit(Left(TERM_ELIDE), Right()), Right())
+		axis = Axis(Left(), Right())
 
 		# MODE
 		if tokens.peek()=='MODE':
@@ -264,42 +253,43 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			mode = tokens.next().lex
 			if mode not in VOCAB: raise Err('E_MODE')
 
-		# LEFT
-		if tokens.peek() in VOCAB[mode]['MOD']:
-			axis[L][L].opr=tokens.next()
-			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_LEFT_DAT')
-			axis[L][L].append(tokens.next())
+		# WILD
+		if tokens.peek()=='VAL': axis[L].append(Term(tokens.next()))
 
-		# FUNC
-		while tokens.peek()=='SF':
-			tokens.next()
-			t = tokens.next()
-			if t.kind not in FUNC_KINDS: raise Err('E_FUNC_KIND')
-			if t.kind=='VAR': bind.append(t.lex)
-			axis[L][L].append(t)
-			
-		# CMP
-		if tokens.peek() in VOCAB[mode]['CMP']:
-			axis[L].opr=tokens.next()
-			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_CMP_DAT')
+		# NON-WILD
+		else:
+			# LEFT
+			if tokens.peek() in VOCAB[mode]['MOD']: axis[L].append(parse_term(Token('VAL', ELIDE), tokens, bind, mode))
 
-		# LIMIT RIGHT
-		if tokens.peek() in VOCAB[mode]['DAT']:
-			if axis[L].opr.kind=='SEP_PASS': axis[L].opr=Token('EQL', ELIDE)
-			axis[L][R]=parse_right(tokens, bind, mode)
+			# FUNC
+			while tokens.peek()=='SF':
+				if not axis[L]: axis[L].append(TERM_ELIDE)
+				tokens.next()
+				t = tokens.next()
+				if t.kind=='VAR': bind.append(t.lex)
+				elif t.lex not in VOCAB[mode]['FUNC']: raise Err('E_FUNC_NAME')
+				axis[L].append(t)
+				
+			# CMP
+			if tokens.peek() in VOCAB[mode]['CMP']:
+				axis.opr=tokens.next()
+				if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_CMP_DAT')
 
-		# AXIS RIGHT
-		if tokens.peek() in VOCAB[mode]['CMP']:
-			if not axis[L][R]: raise Err('E_AXIS_RIGHT')
-			axis.opr=tokens.next()
-			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_CMP_DAT')
-			axis[R]=parse_right(tokens, bind, mode)
+			# RIGHT
+			while tokens.peek() in VOCAB[mode]['DAT']:
+				if not axis[L]: axis[L].append(TERM_ELIDE)
+				if axis.opr.kind=='SEP_PASS': axis.opr=Token('EQL', ELIDE)
+				axis[R].append(parse_term(tokens.next(), tokens, bind, mode))
+				if tokens.peek()=='OR':
+					tokens.next()
+					if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
+				if tokens.peek() == MODE: raise Err('E_RIGHT_MODE')
 
-		# AXES HIGH->LOW
-		if len(axis[L][L])>1 or axis[L][R]: vec.prepend(axis.check())
+			if axis.opr.kind in VOCAB[mode]['CMP'] and not axis[R]: raise Err('E_CMP_RIGHT')
 
-		if tokens.peek()=='SA':
-			tokens.next()
+		if axis[L]:	
+			axis[L], axis[R] = axis[L].check(), axis[R].check()
+			vec.prepend(axis.check()) # AXES HIGH->LOW
 			continue
 
 		# VECTOR
@@ -322,8 +312,11 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			tokens.next()
 			continue
 
-		if tokens.peek()!=EOF:
-			raise Err('E_TOK')
+		if tokens.peek()=='SA':
+			tokens.next()
+			continue
+
+		raise Err('E_TOK')
 
 	if vec: 
 		vec.mode=mode
@@ -331,25 +324,15 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 	if mat: yield mat.check()
 
 
-def parse_right (tokens: Stream, bind: List[str], mode: str) -> Right:
-	right = Right()
-	while tokens.peek() in VOCAB[mode]['DAT']:
-		term = Term(tokens.next())
-		if tokens.peek() in VOCAB[mode]['MOD']:
-			term.opr=tokens.next()
-			t = tokens.next()
-			if t.kind not in VOCAB[mode]['DAT']: raise Err('E_TERM_DAT')
-			if t.kind in {'SAME','VAR'} and t.lex not in bind: raise Err('E_VAR_BIND')
-			term.append(t)
-
-		right.append(term.check())
-
-		if tokens.peek()=='OR':
-			tokens.next()
-			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
-		if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
-	return right.check()
-
+def parse_term (token: Token, tokens: Stream, bind: List[str], mode: str) -> Term:
+	term = Term(token)
+	if tokens.peek() in VOCAB[mode]['MOD']:
+		term.opr=tokens.next()
+		t = tokens.next()
+		if t.kind not in VOCAB[mode]['DAT']: raise Err('E_TERM_DAT')
+		if t.kind in {'SAME', 'VAR'} and t.lex not in bind: raise Err('E_VAR_BIND')
+		term.append(t)
+	return term.check()
 
 class Meme(Node):
 	opr: Token = TOK_SM
@@ -368,9 +351,8 @@ class Meme(Node):
 				for axis_idx, axis in enumerate(vec):
 					if not isinstance(axis, Axis): raise TypeError('E_TYPE_AXIS')
 					# DO VAR BIND HERE
-			limit=Limit(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
-			limit.opr=Token('EQL',ELIDE)
-			axis=Axis(limit, Right())
+			axis=Axis(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
+			axis.opr=Token('EQL',ELIDE)
 			self[mat_idx].pad(axis)
 
 		return self
@@ -473,12 +455,10 @@ ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
 
 class SQLUtil():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
-	func_keys = {"grp","asc","dsc","sum","avg","min","max"}
 
 	@staticmethod
 	def holder(token: Token, bind: dict) -> SQL:
 		if token.kind=='DBCOL': return token.dat
-		elif token.kind=='NULL': return SQLUtil.holder(bind[VAL], bind)
 		elif token.kind=='VAL': return SQLUtil.holder(bind[VAL], bind)
 		elif token.kind=='SAME': return SQLUtil.holder(bind[SAME], bind)
 		elif token.kind=='VAR':
@@ -510,10 +490,8 @@ class SQLUtil():
 	def select(axis: Axis, bind: dict) -> Tuple[SQL, List[None|Param], Agg]:
 		agg_func = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
 		agg = ANONE
-		
-		sqlterm, sqlparams = SQLUtil.term(axis[L][L][L], bind)
-
-		for t in axis.funcs:
+		sqlterm, sqlparams = SQLUtil.term(axis[L][L], bind)
+		for t in axis[L][R:]:
 			if t.lex in agg_func:
 				if agg: raise Err('E_DBL_AGG')
 				agg = AHAV
@@ -524,33 +502,22 @@ class SQLUtil():
 		
 	@staticmethod
 	def where(axis: Axis, bind: dict) -> Tuple[SQL, List[None|Param], Agg]:
+		if axis.opr.kind=='SEP_PASS': return '', [], ANONE
+		sym = SQLUtil.cmp2sql[axis.opr.kind]
+		lp, rp, junc, ts = '', '', '', []
+
+		if len(axis[R]) > 1:
+			lp, rp = '(', ')'
+			junc = ' AND ' if axis.opr.kind=='NOT' else ' OR '
 
 		leftsql, params, agg = SQLUtil.select(axis, bind)
+		for t in axis[R]:
+			sql, subparams = SQLUtil.term(t, bind)
+			if sym in ('LIKE','ILIKE'): sql = sql.replace('%s', "CONCAT('%', %s, '%')", 1)
+			ts.append(f"{leftsql} {sym} {sql}")
+			params.extend(subparams)
 
-		sqls=[]
-		for comp in (axis[L], axis):
-			if comp.opr.kind=='SEP_PASS': continue
-
-			sym = SQLUtil.cmp2sql[comp.opr.kind]
-			lp, rp, junc, ts = '', '', ' AND ', []
-
-			if len(comp[R]) > 1 and comp.opr.kind=='EQL':
-				lp, rp, junc = '(', ')', ' OR '
-
-			for t in comp[R]:
-				if t[0].kind=='VAL': continue
-				sql, subparams = SQLUtil.term(t, bind)
-				if sym in ('LIKE','ILIKE'): sql = sql.replace('%s', "CONCAT('%', %s, '%')", 1)
-				ts.append(f"{leftsql} {sym} {sql}")
-				params.extend(subparams)
-
-			if ts: sqls.append(f"{lp}{junc.join(ts)}{rp}")
-
-		lensql = len(sqls)
-		if lensql==0: wherestr = ''
-		elif lensql==1: wherestr = sqls[0]
-		else: wherestr = '('+ ' AND '.join(sqls) + ')'
-		return wherestr, params, agg
+		return lp + junc.join(ts) + rp, params, agg
 
 
 # TRANSLATE TO POSTGRES
@@ -578,7 +545,7 @@ class MemePGSQL(Meme):
 				else: raise Err('E_MODE_KEY')					
 
 			# QUERY VECTORS
-			# tab row col term:meta>term,term<term,term;
+			# tab row col term:meta>term,term;
 			for vec in mat:
 				if vec.mode!=Q: continue
 				if len(vec)<4: raise Err('E_Q_LEN')
@@ -586,10 +553,13 @@ class MemePGSQL(Meme):
 				bind[VAL]=None
 				curr = {name: None for name in axes}
 				for name in axes:
+					axis = vec[config[M][name]]
 					bind[SAME] = prev[name]
-					curr[name] = SQLUtil.select(vec[config[M][name]], bind)
+					curr[name] = bind[axis.single.delide] if axis.single.delide in bind else axis.single
 
 				bind[SAME] = None
+				colaxis = vec[config[M]['col']]
+				valaxis = vec[config[M]['val']]
 
 				# JOIN
 				if prev['tab']!=curr['tab'] or prev['row']!=curr['row']:
@@ -598,49 +568,49 @@ class MemePGSQL(Meme):
 					selectall = False
 
 					# TAB
-					if not curr['tab'][0] or curr['tab'][0]!='%s': raise Err('E_TBL_ALNUM')
+					if not curr['tab'] or curr['tab'].kind!='ALNUM': raise Err('E_TBL_ALNUM')
 					tab_alias = f't{tab_idx}'
-					froms.append((f"{curr['tab'][0]} AS {tab_alias}", curr['tab'][1], ACNST))
-					selects.append((f"{curr['tab'][0]} AS _tab", curr['tab'][1], ACNST))
+					froms.append(f"{curr['tab']} AS {tab_alias}")
 					tab_idx += 1
+					pricol = f"{tab_alias}.{config[M]['pri']}"
 
 					# ROW
-					pricol = f"{tab_alias}.{config[M]['pri']}"
-					bind[VAL]=Token('DBCOL', pricol)
-					selects.append((f"{curr['row'][0]} AS _row", curr['row'][1], ANONE))
+					bind[SAME]=prev['row'] if prev['row'] is not None else None
+					curr['row']=bind[VAL]=Token('DBCOL', pricol)
 					where, param, _ = SQLUtil.where(vec[config[M]['row']], bind)
 					if where: wheres.append((where, param, ANONE))
 
+					selects.extend([(f"'{curr['tab'].lex}' AS _tab", [], ACNST), (f"{pricol} AS _row", [], ANONE)])
+
 				# COL
-				if vec[config[M]['col']].single.kind=='VAL':
+				if colaxis.single.kind=='VAL':
 					selectall=True
 					continue
 				elif not curr['col']: raise Err('E_COL_NONE')
-				elif curr['col'].kind=='ALNUM': col_alias = tab_alias + '.' + curr['col'][1]
+				elif curr['col'].kind=='ALNUM': col_alias = tab_alias + '.' + curr['col'].dat
 				else: raise Err('E_COL_ALNUM')
 
 				# VAL
-				bind[SAME]=prev['val']
-				bind[VAL]=Token('DBCOL', col_alias)
+				if prev['val']: bind[SAME]=prev['val']
+				curr['val']=bind[VAL]=Token('DBCOL', col_alias)
 
-				valaxis = vec[config[M]['val']]
 				select = SQLUtil.select(valaxis, bind)
-				selects.append(curr['val'])
+				selects.append(select)
 
 				# AGG/SORT
-				funcs = set(t.lex for t in valaxis.funcs)
+				funcs = set(t.lex for t in valaxis[L][R:])
 				if 'grp' in funcs: groups.append(select)
 				if 'asc' in funcs: ords.append((select[0]+' ASC', select[1], select[2]))
 				elif 'dsc' in funcs: ords.append((select[0]+' DESC', select[1], select[2]))
 
-				# WHERE/HAVING
+				# HAVING
 				where = SQLUtil.where(valaxis, bind)
 				if where[0]:
 					if where[2]==AHAV: havings.append(where)
 					else: wheres.append(where)
 			
 				for name in axes:
-					for t in vec[config[M][name]].funcs:
+					for t in vec[config[M][name]][L][R:]:
 						if t.kind=='VAR': bind[t.lex]=curr[name]
 
 				prev = curr.copy()
@@ -651,18 +621,14 @@ class MemePGSQL(Meme):
 			elif selectall: selects.append((f'{tab_alias}.*', [], ANONE))
 
 			selectstr = 'SELECT ' + ', '.join([s[0] for s in selects if s[0]])
-			fromstr = ' FROM ' + ', '.join([s[0] for s in froms if s[0]])
+			fromstr = ' FROM ' + ', '.join(froms)
 			wherestr = '' if not wheres else ' WHERE ' + ' AND '.join([s[0] for s in wheres if s[0]])
 			groupstr = '' if not groups else ' GROUP BY ' + ', '.join([s[0] for s in groups if s[0]])
 			havingstr = '' if not havings else ' HAVING ' + ' AND '.join([s[0] for s in havings if s[0]])
 			ordstr = '' if not ords else ' ORDER BY ' + ', '.join([s[0] for s in ords if s[0]])
-			if config[M]['lim']:
-				limstr += f" LIMIT %s"
-				ords.append(('', [int(config[M]['lim'])]))
-			if config[M]['beg']:
-				limstr += f" OFFSET %s"
-				ords.append(('', [int(config[M]['beg'])]))
-			params = [p for s in froms+selects+wheres+groups+havings+ords for p in s[1] if p is not None]
+			if config[M]['lim']: limstr += f" LIMIT {config[M]['lim']}"
+			if config[M]['beg']: limstr += f" OFFSET {config[M]['beg']}"
+			params = [p for s in selects+wheres+groups+havings+ords for p in s[1] if p is not None]
 			sql.append((selectstr + fromstr + wherestr + groupstr + havingstr + ordstr + limstr, params))
 
 		return sql
@@ -679,7 +645,7 @@ if __name__ == "__main__":
 		with open(sys.argv[2], 'r', encoding='utf-8') as f: data = json.load(f)
 		for idx, example in enumerate(data['examples']):
 			print(f"{idx} {example['input']}")
-			print(f"{example['output']}")
+			print(example['output'])
 			meme = MemePGSQL(example['output'])
 			print(str(meme))
 			print(meme.select())
