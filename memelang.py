@@ -8,7 +8,7 @@ NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 EXAMPLE: roles actor :$a="Mark Hamill"; rating >4; <5; movie _; @ @ @; actor !$a;;
 '''
 
-MEMELANG_VER = 9.28
+MEMELANG_VER = 9.29
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -452,9 +452,9 @@ MEMELANG: roles id _; actor :$a="Mark Hamill"; movie _; @ @ @; @ actor !$a;;
 SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id!=t0.id AND t1.movie = t0.movie;
 
 4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
-MEMELANG: actors id _; age >21; <30; name _; roles title @;;
-MEMELANG(2): actors id _; age >21; <30; name:$n; roles title $n;;
-SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t0.age < 30 AND t1.title = t0.name;
+MEMELANG: actors id _; age >21; <30; name _; roles movie @;;
+MEMELANG(2): actors id _; age >21; <30; name:$n; roles movie $n;;
+SQL: SELECT t0.id, t0.name, t0.age, t1.movie FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t0.age < 30 AND t1.movie = t0.name;
 
 5. EXAMPLE EMBEDDING
 MEMELANG: movies id _; description <=>"war":dsc>0.5; year >2005; %m lim 10; beg 100;;
@@ -651,7 +651,9 @@ class MemePGSQL(Meme):
 			sqlstr,space,params='','',[]
 			for keyword, sep, items, usealias in SQLPARTS:
 				if not items: continue
-				sqlstr+=space+keyword+' '+sep.join([(s.holder if usealias else s.lex)  for s in items if s.lex])
+				itemstr = sep.join([(s.holder if usealias else s.lex)  for s in items if s.lex])
+				if not itemstr: continue
+				sqlstr+=space+keyword+' '+itemstr
 				params.extend(p for s in items for p in s.params if p is not None)
 				space = ' '
 
