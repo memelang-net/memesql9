@@ -9,7 +9,7 @@ NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
 EXAMPLE: roles _ actor "Mark Hamill"; rating >4; <5; movie _; !@ @ @; actor _;;
 '''
 
-MEMELANG_VER = 9.26
+MEMELANG_VER = 9.27
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -46,6 +46,8 @@ TOKEN_KIND_PATTERNS = (
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MAT-1, VEC=-1, LIMIT)
 	('SAME',		re.escape(SAME)),		# REFERENCES (MAT,   VEC-1,  LIMIT)
 	('VAR',			re.escape(SIGIL) + r'[A-Za-z0-9_]+'),
+	('YMDHMS',		r'\d\d\d\d\-\d\d-\d\d\-\d\d:\d\d:\d\d'),	 	# YYYY-MM-DD-HH:MM:SS
+	('YMD',			r'\d\d\d\d\-\d\d\-\d\d'),	 					# YYYY-MM-DD
 	('ALNUM',		r'[A-Za-z][A-Za-z0-9_]*'), # ALPHANUMERICS ARE UNQUOTED
 	('DEC',			r'-?\d*\.\d+'),
 	('INT',			r'-?\d+'),
@@ -74,7 +76,7 @@ VOCAB = {
 	Q: { # DQL
 		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR'},
 		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
-		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','VAL','EMB'},
+		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','VAL','EMB','YMD','YMDHMS'},
 		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt"}
 	},
 	M: { # META
@@ -164,7 +166,8 @@ class Node(list):
 	@property
 	def suffix(self) -> Memelang: return ''
 	
-	def __str__(self) -> Memelang: return self.prefix + self.opr.lex.join([s for s in map(str, self.iter) if s]) + self.suffix
+	def __str__(self) -> Memelang:
+		return re.sub(r'\s+', ' ', self.prefix + self.opr.lex.join(map(str, self.iter)) + self.suffix)
 
 	@property
 	def kinds(self) -> List[str]:
@@ -239,7 +242,6 @@ class Matrix(Node):
 def lex(src: Memelang) -> Iterator[Token]:
 	for m in MASTER_PATTERN.finditer(src):
 		kind = m.lastgroup
-		if kind=='TOK': kind = m.group()[1:-1]
 		if kind in IGNORE_KINDS: continue
 		if kind=='MISMATCH': raise Err('E_TOK')
 		yield Token(kind, m.group())
@@ -547,12 +549,13 @@ class SQL():
 	def param(self):
 		return None if self.lex!=PH or len(self.params)!=1 else self.params[0]
 
+	# NOT DB SAFE - FOR DEBUGGING ONLY
 	def __str__(self) -> str:
 		sql = self.lex
 		if self.alias: sql += f' AS "{self.alias}"'
 		for p in self.params:
 			if isinstance(p, str): v = "'" + p.replace("'", "''") + "'"
-		elif isinstance(p, list): v = json.dumps(p, separators=(',',':')) + '::VECTOR'
+			elif isinstance(p, list): v = json.dumps(p, separators=(',',':')) + '::VECTOR'
 			elif p is None: v = 'NULL'
 			else: v = str(p)
 			sql = sql.replace(PH, v, 1)
@@ -602,7 +605,9 @@ class MemePGSQL(Meme):
 
 				# JOIN
 				if prev['tab']!=curr['tab'] or not curr['row'].lex or prev['row']!=curr['row']:
-					if curr['tab'].param is None: raise Err('E_TBL_NAME')
+					if curr['tab'].param is None:
+						print(vec)
+						raise Err('E_TBL_NAME')
 					tab_alias = f't{tab_idx}'
 					tab_idx += 1
 					#selects.append(curr['tab'])
@@ -647,7 +652,7 @@ class MemePGSQL(Meme):
 				prev = curr.copy()
 
 			if groups: 
-				if sel_all: raise Err('E_SELALL_GRP')
+				#if sel_all: raise Err('E_SELALL_GRP')
 				selects = [s for s in selects if s.agg>ANONE]
 			elif sel_all: selects.append(SQL(f'{tab_alias}.*', [], ANONE))
 
