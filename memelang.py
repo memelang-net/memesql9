@@ -77,7 +77,7 @@ VOCAB = {
 		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR','DSML'},
 		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
 		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','WILD','EMB','YMD','YMDHMS'},
-		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt"}
+		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt","last"}
 	},
 	M: { # META
 		'CMP': {'EQL'},
@@ -500,7 +500,7 @@ class SQL():
 
 	@staticmethod
 	def select(axis: Axis, bind: dict, alias: str = '') -> 'SQL':
-		agg_func = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX'}
+		agg_func = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX', 'last': 'MAX'}
 		left = SQL.term(axis[L][L], bind)
 		for t in axis[L][R:]:
 			if t.lex in agg_func:
@@ -568,7 +568,8 @@ class MemePGSQL(Meme):
 			sel_all, tab_alias = False, None
 			froms, wheres, selects, ords, groups, havings, bind = [], [], [], [], [], [], {}
 			prev = {axis:None for axis in axes}
-			config = {M: {'lim':0,'beg':0}}
+			config = {M: {'lim':0,'beg':0,'sim':0.5}}
+			for k in config[M]: bind[SIGIL+k]=SQL(PH, [config[M][k]])
 
 			for vec in mat:
 
@@ -577,7 +578,9 @@ class MemePGSQL(Meme):
 				if vec.mode==M:
 					if len(vec)!=2: raise Err('E_X_LEN')
 					key, val = vec[1].single, vec[0].single
-					if key.lex in config[M] and isinstance(val.dat, type(config[M][key.lex])): config[M][key.lex] = val.dat
+					if key.lex in config[M] and isinstance(val.dat, type(config[M][key.lex])):
+						config[M][key.lex] = val.dat
+						bind[SIGIL+key.lex] = SQL(PH, [val.dat])
 					else: raise Err('E_MODE_KEY')
 					continue
 
