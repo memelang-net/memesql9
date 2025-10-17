@@ -36,6 +36,7 @@ TOKEN_KIND_PATTERNS = (
 	('IP',			r'<#>'),
 	('GE',			r'>='),
 	('LE',			r'<='),
+	('DSML',		r'!~'),
 	('NOT',			r'!=?'),
 	('EQL',			r'='),
 	('GT',			r'>'),
@@ -73,7 +74,7 @@ VOCAB = {
 		'FUNC': {'TYP','ROL','DESC'}
 	},
 	Q: { # DQL
-		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR'},
+		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR','DSML'},
 		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
 		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','WILD','EMB','YMD','YMDHMS'},
 		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt"}
@@ -127,7 +128,6 @@ TOK_SM = Token('SM', SM+PRETTY)
 TOK_OR = Token('OR', OR)
 TOK_SF = Token('SF', SF)
 TOK_SEP_TOK = Token('SEP_TOK', '')
-TOK_SEP_PASS = Token('SEP_PASS', '')
 
 class Stream:
 	def __init__(self, token: Iterable[Token]):
@@ -203,7 +203,7 @@ class Left(Node):
 
 # LEFT CMP RIGHT
 class Axis(Node):
-	opr: Token = TOK_SEP_PASS
+	opr: Token = TOK_EQL
 	def check(self) -> 'Axis': 
 		if len(self)!=2: raise Err('E_NODE_LIST')
 		if not isinstance(self[0], Left): raise Err('E_AXIS_LEFT')
@@ -211,7 +211,6 @@ class Axis(Node):
 		return self
 	@property
 	def single(self) -> Token:
-		if self.opr.kind == 'SEP_PASS': return Token('WILD', WILD)
 		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
 
 
@@ -283,16 +282,15 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 		# RIGHT
 		while tokens.peek() in VOCAB[mode]['DAT']:
 			if not axis[L]: axis[L].append(TERM_ELIDE)
-			if axis.opr.kind=='SEP_PASS': axis.opr=Token('EQL', ELIDE)
 			axis[R].append(parse_term(tokens.next(), tokens, bind, mode))
 			if tokens.peek()=='OR':
 				tokens.next()
 				if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
 			if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
 
-		if axis.opr.kind in VOCAB[mode]['CMP'] and not axis[R]: raise Err('E_CMP_RIGHT')
+		if axis[L] and not axis[R]: axis[R]=Right(Term(Token('WILD',ELIDE)))
 
-		if axis[L] or axis[R]:
+		if axis[R]:
 			axis[L], axis[R] = axis[L].check(), axis[R].check()
 			vec.prepend(axis.check()) # AXES HIGH->LOW
 			continue
@@ -471,7 +469,7 @@ PH = '%s'
 EPH = ' = %s'
 
 class SQL():
-	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE'}
+	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE','DSML':'NOT ILIKE'}
 	lex: str
 	alias: str
 	params: List[Union[int, float, str, list]]
@@ -516,14 +514,14 @@ class SQL():
 		
 	@staticmethod
 	def where(axis: Axis, bind: dict) -> 'SQL':
-		if axis.opr.kind=='SEP_PASS': return SQL()
+		if axis.single.kind==WILD: return SQL()
 		sym = SQL.cmp2sql[axis.opr.kind]
 		lp, rp, right, ts = '', '', '', []
 		params = []
 
 		if len(axis[R]) > 1:
 			lp, rp = '(', ')'
-			right = ' AND ' if axis.opr.kind=='NOT' else ' OR '
+			right = ' AND ' if axis.opr.kind in ('NOT','DSML') else ' OR '
 
 		select = SQL.select(axis, bind)
 		params.extend(select.params)
