@@ -3,13 +3,12 @@ info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
 MEMELANG USES AXES ORDERED HIGH TO LOW
 ONE MORE OR WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
-EXAMPLE: AXIS3 AXIS2 AXIS1 AXIS0
-NEVER SPACE AROUND OPERATOR
-NEVER SPACE BETWEEN COMPARATOR/COMMA/FUNC AND VALUES
-EXAMPLE: roles _ actor "Mark Hamill"; rating >4; <5; movie _; !@ @ @; actor _;;
+EXAMPLE: AXIS2 AXIS1 AXIS0
+NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
+EXAMPLE: roles actor :$a="Mark Hamill"; rating >4; <5; movie _; @ @ @; actor !$a;;
 '''
 
-MEMELANG_VER = 9.27
+MEMELANG_VER = 9.28
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -17,7 +16,7 @@ from typing import List, Iterator, Iterable, Dict, Tuple, Union
 Memelang = str
 Err = SyntaxError
 
-ELIDE, SIGIL, VAL, MSAME, SAME, MODE, EOF =  '', '$', '_', '^', '@',  '%', None
+ELIDE, SIGIL, WILD, MSAME, SAME, MODE, EOF =  '', '$', '_', '^', '@',  '%', None
 SA, SV, SM, SF, OR, PRETTY = ' ', ';', ';;', ':', ',', ' '
 L, R = 0, 1
 
@@ -42,7 +41,7 @@ TOKEN_KIND_PATTERNS = (
 	('GT',			r'>'),
 	('LT',			r'<'),
 	('SMLR',		r'~'),
-	('VAL',			re.escape(VAL)),		# NEVER QUOTE
+	('WILD',		re.escape(WILD)),		# NEVER QUOTE
 	('MSAME',		re.escape(MSAME)),		# REFERENCES (MAT-1, VEC=-1, LIMIT)
 	('SAME',		re.escape(SAME)),		# REFERENCES (MAT,   VEC-1,  LIMIT)
 	('VAR',			re.escape(SIGIL) + r'[A-Za-z0-9_]+'),
@@ -63,20 +62,20 @@ TOKEN_KIND_PATTERNS = (
 MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN_KIND_PATTERNS))
 
 IGNORE_KINDS = {'COMMENT','MTBL'}
-DELIDE = {'SAME':SAME,'MSAME':MSAME,'VAL': VAL,'EQL': '='}
+DELIDE = {'SAME':SAME,'MSAME':MSAME,'WILD': WILD,'EQL': '='}
 
 D, Q, M = MODE+'d', MODE+'q', MODE+'m'
 VOCAB = {
 	D: { # DDL
 		'CMP': {'EQL','NOT','GT','GE','LT','LE'},
 		'MOD': {},
-		'DAT': {'ALNUM','QUOT','INT','DEC','SAME','MSAME','VAL'},
+		'DAT': {'ALNUM','QUOT','INT','DEC','SAME','MSAME','WILD'},
 		'FUNC': {'TYP','ROL','DESC'}
 	},
 	Q: { # DQL
 		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR'},
 		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
-		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','VAL','EMB','YMD','YMDHMS'},
+		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','WILD','EMB','YMD','YMDHMS'},
 		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt"}
 	},
 	M: { # META
@@ -180,14 +179,15 @@ class Node(list):
 class Term(Node):
 	opr: Token = TOK_SEP_TOK
 
-TERM_ELIDE = Term(Token('VAL',ELIDE))
+TERM_ELIDE = Term(Token('WILD',ELIDE))
 
 
 # TERM {OR TERM}
 class Right(Node):
 	opr: Token = TOK_OR
 	def check(self) -> 'Right':
-		if len(self) and any(not isinstance(t, Term) for t in self): raise Err('E_RIGHT_TERM')
+		if not len(self): return self
+		if any(not isinstance(t, Term) for t in self): raise Err('E_RIGHT_TERM')
 		return self
 
 
@@ -195,7 +195,7 @@ class Right(Node):
 class Left(Node): 
 	opr: Token = TOK_SF
 	def check(self) -> 'Left':
-		if not len(self): raise Err('E_NODE_LIST')
+		if not len(self): return self
 		if not isinstance(self[0], Term): raise Err('E_LEFT_TERM')
 		if len(self)>1 and any(t.kind not in {'ALNUM','VAR'} for t in self[1:]): raise Err('E_LEFT_FUNC')
 		return self
@@ -211,7 +211,7 @@ class Axis(Node):
 		return self
 	@property
 	def single(self) -> Token:
-		if self.opr.kind == 'SEP_PASS': return Token('VAL', VAL)
+		if self.opr.kind == 'SEP_PASS': return Token('WILD', WILD)
 		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
 
 
@@ -263,41 +263,36 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			mode = tokens.next().lex
 			if mode not in VOCAB: raise Err('E_MODE')
 
-		# WILD
-		if tokens.peek()=='VAL': axis[L].append(Term(tokens.next()))
+		# LEFT
+		if tokens.peek() in VOCAB[mode]['MOD']: axis[L].append(parse_term(Token('WILD', ELIDE), tokens, bind, mode))
 
-		# NON-WILD
-		else:
-			# LEFT
-			if tokens.peek() in VOCAB[mode]['MOD']: axis[L].append(parse_term(Token('VAL', ELIDE), tokens, bind, mode))
+		# FUNC
+		while tokens.peek()=='SF':
+			if not axis[L]: axis[L].append(TERM_ELIDE)
+			tokens.next()
+			t = tokens.next()
+			if t.kind=='VAR': bind.append(t.lex)
+			elif t.lex not in VOCAB[mode]['FUNC']: raise Err('E_FUNC_NAME')
+			axis[L].append(t)
+			
+		# CMP
+		if tokens.peek() in VOCAB[mode]['CMP']:
+			axis.opr=tokens.next()
+			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_CMP_DAT')
 
-			# FUNC
-			while tokens.peek()=='SF':
-				if not axis[L]: axis[L].append(TERM_ELIDE)
+		# RIGHT
+		while tokens.peek() in VOCAB[mode]['DAT']:
+			if not axis[L]: axis[L].append(TERM_ELIDE)
+			if axis.opr.kind=='SEP_PASS': axis.opr=Token('EQL', ELIDE)
+			axis[R].append(parse_term(tokens.next(), tokens, bind, mode))
+			if tokens.peek()=='OR':
 				tokens.next()
-				t = tokens.next()
-				if t.kind=='VAR': bind.append(t.lex)
-				elif t.lex not in VOCAB[mode]['FUNC']: raise Err('E_FUNC_NAME')
-				axis[L].append(t)
-				
-			# CMP
-			if tokens.peek() in VOCAB[mode]['CMP']:
-				axis.opr=tokens.next()
-				if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_CMP_DAT')
+				if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
+			if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
 
-			# RIGHT
-			while tokens.peek() in VOCAB[mode]['DAT']:
-				if not axis[L]: axis[L].append(TERM_ELIDE)
-				if axis.opr.kind=='SEP_PASS': axis.opr=Token('EQL', ELIDE)
-				axis[R].append(parse_term(tokens.next(), tokens, bind, mode))
-				if tokens.peek()=='OR':
-					tokens.next()
-					if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
-				if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
+		if axis.opr.kind in VOCAB[mode]['CMP'] and not axis[R]: raise Err('E_CMP_RIGHT')
 
-			if axis.opr.kind in VOCAB[mode]['CMP'] and not axis[R]: raise Err('E_CMP_RIGHT')
-
-		if axis[L]:	
+		if axis[L] or axis[R]:
 			axis[L], axis[R] = axis[L].check(), axis[R].check()
 			vec.prepend(axis.check()) # AXES HIGH->LOW
 			continue
@@ -344,6 +339,7 @@ def parse_term (token: Token, tokens: Stream, bind: List[str], mode: str) -> Ter
 		term.append(t)
 	return term.check()
 
+
 class Meme(Node):
 	opr: Token = TOK_SM
 	src: Memelang
@@ -380,7 +376,9 @@ class Meme(Node):
 	# OVERWRITE WITH YOUR EMBEDDING FUNCTION
 	def embedify(self,tok: Token) -> Token:
 		if tok.kind not in {'QUOT','ALNUM'}: raise Err('E_EMBED')
-		return Token('EMB', '[0.1,0.2]')
+		inp: str = tok.lex
+		out: str = json.dumps([0.1,0.2])
+		return Token('EMB', out)
 
 
 # GENERATE RANDOM MEMELANG DATA
@@ -428,16 +426,12 @@ class Fuzz():
 		return Fuzz.left(mode) + comp + Fuzz.right(mode)
 
 	@staticmethod
-	def vector(axis_len:int = 4) -> Memelang:
-		bind, vector = [], []
-		for i in range(axis_len):
-			if i>0: bind.append(SAME)
-			vector.append(Fuzz.axis(bind))
-		return SA.join(vector)
+	def sql_vec(join:bool=False) -> Memelang:
+		return ('' if not join else (Fuzz.dat('ALNUM') + SA)) + Fuzz.dat('ALNUM') + SA + Fuzz.axis();
 
 	@staticmethod
-	def mat_table(col_len:int = 5) -> Memelang:
-		return Fuzz.dat('ALNUM') + SA + VAL + SA + SV.join(Fuzz.dat('ALNUM') + SA + Fuzz.axis() for _ in range(col_len)) + SM
+	def sql_mat(col_len:int = 5) -> Memelang:
+		return Fuzz.sql_vec(True) + SV.join(Fuzz.sql_vec(False) for _ in range(col_len-1)) + SM
 
 
 
@@ -445,30 +439,30 @@ class Fuzz():
 
 '''
 1. EXAMPLE TABLE DEFINITIONS
-%d roles _ id :ROL=ID; :TYP=INT; >0; rating :TYP=DEC; >0; <=5; actor :TYP=STR; movie :TYP=STR;;
-%d actors _ id :ROL=ID; :TYP=INT; >0; name :TYP=STR;; age :TYP=INT; >=0; <200;;
-%d movies _ id :ROL=ID; :TYP=INT; >0; description :TYP=STR; year >1800; <2100; genre scifi,drama,comedy,documentary;;
+%d roles id :TYP=INT; >0; rating :TYP=DEC; >0; <=5; actor :TYP=STR; movie :TYP=STR;;
+%d actors id :TYP=INT; >0; name :TYP=STR; age :TYP=INT; >=0; <200;;
+%d movies id :TYP=INT; >0; description :TYP=STR; year >1800; <2100; genre scifi,drama,comedy,documentary;;
 
 2. EXAMPLE QUERY
-MEMELANG: roles _ actor "Mark Hamill",Mark; movie _; rating >4;;
+MEMELANG: roles actor "Mark Hamill",Mark; movie _; rating >4;;
 SQL: SELECT t0.actor, t0.movie, t0.rating FROM roles as t0 WHERE (t0.actor = 'Mark Hamill' or t0.actor = 'Mark') AND t0.rating > 4;
 
 3. EXAMPLE JOIN
-MEMELANG: roles _ actor "Mark Hamill"; movie _; !@ @ @; actor _;;
+MEMELANG: roles id _; actor :$a="Mark Hamill"; movie _; @ @ @; @ actor !$a;;
 SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id!=t0.id AND t1.movie = t0.movie;
 
 4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
-MEMELANG: actors _ age >21; <30; name _; roles _ title @;;
-MEMELANG(2): actors _ age >21; <30; name:$n; roles _ title $n;;
+MEMELANG: actors id _; age >21; <30; name _; roles title @;;
+MEMELANG(2): actors id _; age >21; <30; name:$n; roles title $n;;
 SQL: SELECT t0.id, t0.name, t0.age, t1.title FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t0.age < 30 AND t1.title = t0.name;
 
 5. EXAMPLE EMBEDDING
-MEMELANG: movies _ description <=>"war":dsc>0.5; year >2005; %m lim 10; beg 100;;
-MEMELANG(2): movies _ description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
+MEMELANG: movies id _; description <=>"war":dsc>0.5; year >2005; %m lim 10; beg 100;;
+MEMELANG(2): movies id _; description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
 SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3]::VECTOR, t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]::VECTOR>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3]::VECTOR DESC LIMIT 10 OFFSET 100;
 
 6. EXAMPLE AGGREGATION
-MEMELANG: roles _ rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
+MEMELANG: roles rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
 SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
 '''
 
@@ -491,9 +485,9 @@ class SQL():
 
 	@staticmethod
 	def dat(token: Token, bind: dict) -> 'SQL':
-		if token.kind in {'VAL','SAME','MSAME','VAR'}:
+		if token.kind in {'WILD','SAME','MSAME','VAR'}:
 			if token.delide not in bind: raise Err('E_VAR_BIND')
-			return bind[token.delide] if bind[token.delide] else SQL()
+			return SQL() if bind[token.delide] is None else bind[token.delide]
 		return SQL(PH, [token.dat], ACNST)
 
 	@staticmethod
@@ -535,7 +529,7 @@ class SQL():
 		params.extend(select.params)
 		for t in axis[R]:
 			where = SQL.term(t, bind)
-			if sym in ('LIKE','ILIKE'): where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')", 1)
+			if sym in ('LIKE','ILIKE'): where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')")
 			ts.append(f"{select.lex} {sym} {where.lex}")
 			params.extend(where.params)
 
@@ -543,7 +537,7 @@ class SQL():
 
 	@property
 	def holder(self) -> str:
-		return self.lex + ( '' if not self.alias else f' AS "{self.alias}"')
+		return self.lex + ( '' if not self.alias else f' AS {self.alias}')
 
 	@property
 	def param(self):
@@ -552,7 +546,7 @@ class SQL():
 	# NOT DB SAFE - FOR DEBUGGING ONLY
 	def __str__(self) -> str:
 		sql = self.lex
-		if self.alias: sql += f' AS "{self.alias}"'
+		if self.alias: sql += f' AS {self.alias}'
 		for p in self.params:
 			if isinstance(p, str): v = "'" + p.replace("'", "''") + "'"
 			elif isinstance(p, list): v = json.dumps(p, separators=(',',':')) + '::VECTOR'
@@ -569,13 +563,14 @@ class MemePGSQL(Meme):
 		self.embed()
 		tab_idx: int = 0
 		sql: List[SQL] = []
-		axes = ('val','col','row','tab')
+		VAL, COL, TAB = 0, 1, 2
+		axes = (VAL, COL, TAB)
 
 		for mat in self:
-			sel_all, tab_alias, pri_col = False, None, None
+			sel_all, tab_alias = False, None
 			froms, wheres, selects, ords, groups, havings, bind = [], [], [], [], [], [], {}
-			prev = {name:None for name in axes}
-			config = {M: {'val':0,'col':1,'row':2,'tab':3,'lim':0,'beg':0,'pri':'id'}}
+			prev = {axis:None for axis in axes}
+			config = {M: {'lim':0,'beg':0}}
 
 			for vec in mat:
 
@@ -589,65 +584,53 @@ class MemePGSQL(Meme):
 					continue
 
 				# QUERY VECTORS
-				# tab row col term:func:func>term,term;
+				# tab col term:func:func>term,term;
 				if vec.mode!=Q: continue
-				if len(vec)<4: raise Err('E_Q_LEN')
+				if len(vec)<3: raise Err('E_Q_LEN')
 
 				curr = {name: None for name in axes}
 				
 				# TAB
-				bind[VAL],bind[SAME]=None, prev['tab']
-				curr['tab'] = SQL.single(vec[config[M]['tab']], bind)
-
-				# ROW
-				bind[SAME],bind[VAL] = None, prev['row']
-				curr['row'] = SQL.single(vec[config[M]['row']], bind)
+				bind[WILD], bind[SAME] = None, prev[TAB]
+				curr[TAB] = SQL.single(vec[TAB], bind)
 
 				# JOIN
-				if prev['tab']!=curr['tab'] or not curr['row'].lex or prev['row']!=curr['row']:
-					if curr['tab'].param is None:
-						print(vec)
-						raise Err('E_TBL_NAME')
+				if vec[TAB].single.lex != ELIDE:
+					if curr[TAB].param is None: raise Err('E_TBL_NAME')
 					tab_alias = f't{tab_idx}'
 					tab_idx += 1
-					#selects.append(curr['tab'])
-					froms.append(SQL(curr['tab'].param, [], ACNST, tab_alias))
-
-					bind[SAME]=prev['row']
-					curr['row']=bind[VAL]=SQL(f"{tab_alias}.{config[M]['pri']}")
-					selects.append(SQL.select(vec[config[M]['row']], bind))
-					wheres.append(SQL.where(vec[config[M]['row']], bind))
+					#selects.append(curr[TAB])
+					froms.append(SQL(curr[TAB].param, [], ACNST, tab_alias))
 
 				# COL
-				if vec[config[M]['col']].single.kind=='VAL':
+				if vec[COL].single.lex in (WILD,ELIDE) and vec[VAL].single.lex==WILD:
 					sel_all=True
 					continue
 
-				bind[SAME], bind[VAL] = prev['col'], None
-				curr['col'] = SQL.single(vec[config[M]['col']], bind)
-				if curr['col'].param is None: raise Err('E_COL_NAME')
-				#selects.append(curr['col'])
+				bind[SAME], bind[WILD] = prev[COL], None
+				curr[COL] = SQL.single(vec[COL], bind)
+				if curr[COL].param is None: raise Err('E_COL_NAME')
+				#selects.append(curr[COL])
 
 				# VAL
-				bind[SAME]=prev['val']
-				bind[VAL]=SQL(tab_alias + '.' + curr['col'].params[0])
-				curr['val'] = SQL.single(vec[config[M]['val']], bind)
-				wheres.append(SQL.where(vec[config[M]['val']], bind))
+				bind[SAME],bind[WILD] = prev[VAL], SQL(tab_alias + '.' + curr[COL].params[0])
+				curr[VAL] = SQL.single(vec[VAL], bind)
+				wheres.append(SQL.where(vec[VAL], bind))
 
-				select = SQL.select(vec[config[M]['val']], bind, f"{tab_alias}.{curr['col'].param}")
+				select = SQL.select(vec[VAL], bind, f"{tab_alias}_{curr[COL].param}")
 				selects.append(select)
 				#selects.append(SQL("';'", [], ACNST))
 
 				# AGG/SORT
-				funcs = set(t.lex for t in vec[config[M]['val']][L][R:])
+				funcs = set(t.lex for t in vec[VAL][L][R:])
 				if 'grp' in funcs: groups.append(select)
 				if 'asc' in funcs: ords.append(SQL(select.lex+' ASC', select.params, ANONE))
 				elif 'dsc' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
 
 				# BIND VARS			
-				for name in axes:
-					for t in vec[config[M][name]][L][R:]:
-						if t.kind=='VAR': bind[t.lex]=curr[name]
+				for axis in axes:
+					for t in vec[axis][L][R:]:
+						if t.kind=='VAR': bind[t.lex]=curr[axis]
 
 				prev = curr.copy()
 
