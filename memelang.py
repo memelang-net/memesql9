@@ -2,13 +2,13 @@
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
 MEMELANG USES AXES ORDERED HIGH TO LOW
-ONE MORE OR WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
-EXAMPLE: AXIS2 AXIS1 AXIS0
+ONE OR MORE WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 EXAMPLE: roles actor :$a="Mark Hamill"; rating >4; <5; movie _; @ @ @; actor !$a;;
 '''
 
-MEMELANG_VER = 9.29
+MEMELANG_VER = 9.34
+syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -22,7 +22,7 @@ L, R = 0, 1
 
 TOKEN_KIND_PATTERNS = (
 	('COMMENT',		r'//[^\n]*'),
-	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EMOTIC CHARS "John \"Jack\" Kennedy"
+	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EXOTIC CHARS "John \"Jack\" Kennedy"
 	('MTBL',		r'-*\|'),
 	('EMB',			r'\[(?:-?\d+(?:\.\d+)?)(?:\s*,\s*-?\d+(?:\.\d+)?)*\]'), # JSON ARRAY OF DECS [0.1,0.2]
 	('POW',			r'\*\*'),
@@ -260,7 +260,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 		if tokens.peek()=='MODE':
 			if vec: raise Err('E_VEC_MODE')
 			mode = tokens.next().lex
-			if mode not in VOCAB: raise Err('E_MODE')
+			if mode not in VOCAB: raise Err(f'E_MODE {mode}')
 
 		# LEFT
 		if tokens.peek() in VOCAB[mode]['MOD']: axis[L].append(parse_term(Token('WILD', ELIDE), tokens, bind, mode))
@@ -271,7 +271,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			tokens.next()
 			t = tokens.next()
 			if t.kind=='VAR': bind.append(t.lex)
-			elif t.lex not in VOCAB[mode]['FUNC']: raise Err('E_FUNC_NAME')
+			elif t.lex not in VOCAB[mode]['FUNC']: raise Err(f'E_FUNC_NAME :{t.lex}')
 			axis[L].append(t)
 			
 		# CMP
@@ -436,37 +436,36 @@ class Fuzz():
 ### SQL ### 
 
 '''
-1. EXAMPLE TABLE DEFINITIONS
+1. ex TABLE DEFINITIONS
 %d roles id :TYP=INT; >0; rating :TYP=DEC; >0; <=5; actor :TYP=STR; movie :TYP=STR;;
 %d actors id :TYP=INT; >0; name :TYP=STR; age :TYP=INT; >=0; <200;;
 %d movies id :TYP=INT; >0; description :TYP=STR; year >1800; <2100; genre scifi,drama,comedy,documentary;;
 
-2. EXAMPLE QUERY
+2. ex QUERY
 MEMELANG: roles actor "Mark Hamill",Mark; movie _; rating >4;;
 SQL: SELECT t0.actor, t0.movie, t0.rating FROM roles as t0 WHERE (t0.actor = 'Mark Hamill' or t0.actor = 'Mark') AND t0.rating > 4;
 
-3. EXAMPLE JOIN
-MEMELANG: roles id _; actor :$a="Mark Hamill"; movie _; @ @ @; @ actor !$a;;
+3. ex JOIN
+MEMELANG: roles id _; actor :$a="Mark Hamill"; movie _; @ @ @; actor !$a;;
 SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id!=t0.id AND t1.movie = t0.movie;
 
-4. EXAMPLE TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
+4. ex TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
 MEMELANG: actors id _; age >21; <30; name _; roles movie @;;
 MEMELANG(2): actors id _; age >21; <30; name:$n; roles movie $n;;
 SQL: SELECT t0.id, t0.name, t0.age, t1.movie FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t0.age < 30 AND t1.movie = t0.name;
 
-5. EXAMPLE EMBEDDING
+5. ex EMBEDDING
 MEMELANG: movies id _; description <=>"war":dsc>0.5; year >2005; %m lim 10; beg 100;;
 MEMELANG(2): movies id _; description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
 SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3]::VECTOR, t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]::VECTOR>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3]::VECTOR DESC LIMIT 10 OFFSET 100;
 
-6. EXAMPLE AGGREGATION
+6. ex AGGREGATION
 MEMELANG: roles rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
 SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
 '''
 
 ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
-PH = '%s'
-EPH = ' = %s'
+PH, EPH = '%s', ' = %s'
 
 class SQL():
 	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE','DSML':'NOT ILIKE'}
@@ -474,6 +473,7 @@ class SQL():
 	alias: str
 	params: List[Union[int, float, str, list]]
 	agg: int|None
+	tally = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX', 'last': 'MAX'}
 
 	def __init__(self, lex: str = '', params: List[Union[int, float, str, list]] = None, agg: int = ANONE, alias: str = ''):
 		self.lex = lex
@@ -500,13 +500,12 @@ class SQL():
 
 	@staticmethod
 	def select(axis: Axis, bind: dict, alias: str = '') -> 'SQL':
-		agg_func = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX', 'last': 'MAX'}
 		left = SQL.term(axis[L][L], bind)
 		for t in axis[L][R:]:
-			if t.lex in agg_func:
+			if t.lex in SQL.tally:
 				if left.agg == AHAV: raise Err('E_DBL_AGG')
 				left.agg = AHAV
-				left.lex = agg_func[t.lex] + ('' if '(1)' in agg_func[t.lex] else '(' + left.lex + ')')
+				left.lex = SQL.tally[t.lex] + ('' if '(1)' in SQL.tally[t.lex] else '(' + left.lex + ')')
 			elif t.lex=='grp': left.agg = AGRP
 			# TO DO: FLAG CONFLICTS
 		if alias: left.alias=alias
@@ -527,7 +526,7 @@ class SQL():
 		params.extend(select.params)
 		for t in axis[R]:
 			where = SQL.term(t, bind)
-			if sym in ('LIKE','ILIKE'): where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')")
+			if 'ILIKE' in sym: where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')")
 			ts.append(f"{select.lex} {sym} {where.lex}")
 			params.extend(where.params)
 
@@ -571,6 +570,14 @@ class MemePGSQL(Meme):
 			config = {M: {'lim':0,'beg':0,'sim':0.5}}
 			for k in config[M]: bind[SIGIL+k]=SQL(PH, [config[M][k]])
 
+			# Precheck if grouped
+			grouping = False
+			for vec in mat:
+				if vec.mode!=Q or len(vec)<3: continue
+				if 'grp' in set(t.lex for t in vec[VAL][L][R:]):
+					grouping = True
+					break
+
 			for vec in mat:
 
 				# META VECTORS
@@ -600,7 +607,6 @@ class MemePGSQL(Meme):
 					if curr[TAB].param is None: raise Err('E_TBL_NAME')
 					tab_alias = f't{tab_idx}'
 					tab_idx += 1
-					#selects.append(curr[TAB])
 					froms.append(SQL(curr[TAB].param, [], ACNST, tab_alias))
 
 				# COL
@@ -616,14 +622,17 @@ class MemePGSQL(Meme):
 				# VAL
 				bind[SAME],bind[WILD] = prev[VAL], SQL(tab_alias + '.' + curr[COL].params[0])
 				curr[VAL] = SQL.single(vec[VAL], bind)
-				wheres.append(SQL.where(vec[VAL], bind))
 
-				select = SQL.select(vec[VAL], bind, f"{tab_alias}_{curr[COL].param}")
+				if vec[VAL].single.kind!='WILD': wheres.append(SQL.where(vec[VAL], bind))
+
+				funcs = set(t.lex for t in vec[VAL][L][R:])
+				if grouping and not bool(funcs & (set(SQL.tally) | {'grp'})): 
+					vec[VAL][L].append(Token('ALNUM', 'last'))
+
+				select = SQL.select(vec[VAL], bind) # f"{tab_alias}_{curr[COL].param}"
 				selects.append(select)
-				#selects.append(SQL("';'", [], ACNST))
 
 				# AGG/SORT
-				funcs = set(t.lex for t in vec[VAL][L][R:])
 				if 'grp' in funcs: groups.append(select)
 				if 'asc' in funcs: ords.append(SQL(select.lex+' ASC', select.params, ANONE))
 				elif 'dsc' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
@@ -635,7 +644,7 @@ class MemePGSQL(Meme):
 
 				prev = curr.copy()
 
-			if groups: 
+			if grouping: 
 				#if sel_all: raise Err('E_SELALL_GRP')
 				selects = [s for s in selects if s.agg>ANONE]
 			elif sel_all: selects.append(SQL(f'{tab_alias}.*', [], ANONE))
@@ -674,11 +683,11 @@ if __name__ == "__main__":
 		print(str(meme))
 		print(meme.select())
 	elif len(sys.argv)==3 and sys.argv[1]=='file':
-		with open(sys.argv[2], 'r', encoding='utf-8') as f: data = json.load(f)
-		for idx, example in enumerate(data['examples']):
-			print(f"{idx}. {example['input']}")
-			print(example['output'])
-			meme = MemePGSQL(example['output'])
+		with open('train/data_'+sys.argv[2]+'.json', 'r', encoding='utf-8') as f: data = json.load(f)
+		for idx, ex in enumerate(data['examples']):
+			print(f"{idx}. {ex['input']}")
+			print(ex['output'])
+			meme = MemePGSQL(ex['output'])
 			print(str(meme))
 			print(str(meme.select()[0]))
 			print()
