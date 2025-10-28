@@ -4,11 +4,115 @@ This script is optimized for prompting LLMs
 MEMELANG USES AXES ORDERED HIGH TO LOW
 ONE OR MORE WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
-EXAMPLE: roles actor :$a="Mark Hamill"; rating >4; <5; movie _; @ @ @; actor !$a;;
 '''
 
-MEMELANG_VER = 9.34
+MEMELANG_VER = 9.35
+
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
+
+examples = {
+	"schema":"%d roles id :ROL=UNI;:TYP=INT;>0;rating :DESC=\"Decimal 0-5 star rating of performance\";:TYP=DEC;>0;<=5;actor :DESC=\"Actor's full name\";:TYP=STR;movie :DESC=\"Movie's full name\";:TYP=STR;;%d actors id :ROL=UNI;:TYP=INT;>0;name :DESC=\"Actor's full name\";:TYP=STR;age :DESC=\"Actor's age in years\";:TYP=INT;>=0;<200;;%d movies id :ROL=UNI;:TYP=INT;>0;description :DESC=\"Brief description of movie plot\";:TYP=STR;year :DESC=\"Year of production AD\";:TYP=INT;>1800;<2100;genre scifi,drama,comedy,documentary;:TYP=STR;title :DESC=\"Full movie title\";:TYP=STR;;%for actors name _;roles actor @;;%for movies title _;roles movie @;;",
+	"examples": [
+		{"natlang":"All movies","memelang":"movies _ _"},
+		{"natlang":"all columns for roles","memelang":"roles _ _"},
+		{"natlang":"film title/descriptions","memelang":"movies title _;description _"},
+		{"natlang":"picture 4598679 57949 34860 5685768","memelang":"movies id 4598679,57949,34860,5685768;_"},
+		{"natlang":"All films with IDs over 1000","memelang":"movies id >1000;_"},
+		{"natlang":"movies >=57958","memelang":"movies id >=57958;_"},
+		{"natlang":"Movies released in 1977","memelang":"movies year 1977;_"},
+		{"natlang":"films tagged drama","memelang":"movies genre drama;_"},
+		{"natlang":"documentary genre movies","memelang":"movies genre documentary;_"},
+		{"natlang":"Titanic movie","memelang":"movies title \"Titanic\";_"},
+		{"natlang":"films Alien & Aliens","memelang":"movies title \"Alien\",\"Aliens\";_"},
+		{"natlang":"movies titled Toy Story, Monsters, Inc., or Finding Nemo","memelang":"movies title \"Toy Story\",\"Monsters, Inc.\",\"Finding Nemo\";_"},
+		{"natlang":"Movies whose title contains 'War'","memelang":"movies title ~\"War\";_"},
+		{"natlang":"Movies whose description contains 'space opera'","memelang":"movies description ~\"space opera\";_"},
+		{"natlang":"Actor id 101","memelang":"actors id 101;_"},
+		{"natlang":"actor #74458739 #28575","memelang":"actors id 74458739,28575;_"},
+		{"natlang":"stars 6756757 and 56647 and 867966 and 794792","memelang":"actors id 6756757,56647,867966,794792;_"},
+		{"natlang":"actors named exactly 'Chris Evans'","memelang":"actors name \"Chris Evans\";_"},
+		{"natlang":"Exact ages 22 or 44 for actors","memelang":"actors age 22,44;_"},
+		{"natlang":"Role 567 and 9766324436","memelang":"roles id 567,9766324436;_"},
+		{"natlang":"Actor rating of 3","memelang":"roles rating 3;_"},
+		{"natlang":"roles with ratings less than 2","memelang":"roles rating <2;_"},
+		{"natlang":"acting roles rated 3 or greater","memelang":"roles rating >=3;_"},
+		{"natlang":"roles rated either 1,5","memelang":"roles rating 1,5;_"},
+		{"natlang":"What movies has Mark Hamill starred in?","memelang":"roles actor \"Mark Hamill\";movie _"},
+		{"natlang":"roles for Samuel L. Jackson, Bruce Willis, Uma Thurman, John Travolta, Ving Rhames","memelang":"roles actor \"Samuel L. Jackson\",\"Bruce Willis\",\"Uma Thurman\",\"John Travolta\",\"Ving Rhames\";_"},
+		{"natlang":"Movies from 1990 to 2000 inclusive","memelang":"movies year >=1990;<=2000;_"},
+		{"natlang":"Comedies after 2010 with wedding in description","memelang":"movies genre comedy;year >2010;description ~\"wedding\";_"},
+		{"natlang":"Find roles where rating equals 4 or 4.5 for Mark Hamill","memelang":"roles actor \"Mark Hamill\";rating 4,4.5;_"},
+		{"natlang":"Movies in 2005 with King in title and drama genre","memelang":"movies year 2005;title ~\"King\";genre drama;_"},
+		{"natlang":"Roles for Harrison Ford with ratings 3, 4, or 5","memelang":"roles actor \"Harrison Ford\";rating 3,4,5;_"},
+		{"natlang":"roles by rating high to low","memelang":"roles rating :dsc;_"},
+		{"natlang":"sort roles by movie A to Z","memelang":"roles movie :asc;_"},
+		{"natlang":"movies by year asc","memelang":"movies year :asc;_"},
+		{"natlang":"Films year newest first","memelang":"movies year :dsc;_"},
+		{"natlang":"actor asc, rating dsc (roles)","memelang":"roles actor :asc;rating :dsc"},
+		{"natlang":"roles: actor A-Z then rating high first","memelang":"roles actor :asc;rating :dsc"},
+		{"natlang":"roles actor up rating down","memelang":"roles actor :asc;rating :dsc"},
+		{"natlang":"movies by year desc, title asc","memelang":"movies year :dsc;title :asc"},
+		{"natlang":"movies released after 2009 descending","memelang":"movies year :dsc>2009;_"},
+		{"natlang":"People whose name contains \"Ann\", A–Z","memelang":"actors name :asc~\"Ann\";_"},
+		{"natlang":"Roles for actors with \"Lee\" in the name, actor A–Z","memelang":"roles actor :asc~\"Lee\";_"},
+		{"natlang":"Movie IDs greater than 5000, order by id ascending","memelang":"movies id :asc>5000;_"},
+		{"natlang":"Actor IDs above 100, highest id first","memelang":"actors id :dsc>100;_"},
+		{"natlang":"All films from the year 2001, year ascending","memelang":"movies year :asc=2001;_"},
+		{"natlang":"Catalog up to and including 1965, year ascending","memelang":"movies year :asc<=1965;_"},
+		{"natlang":"Roles with rating at most 2.0, sort ascending","memelang":"roles rating :asc<=2.0;_"},
+		{"natlang":"Names containing \"son\", Z–A","memelang":"actors name :dsc~\"son\";_"},
+		{"natlang":"Romantic comedy picks with sim>=.75","memelang":"movies description <=>\"romantic comedy\">=0.75;_"},
+		{"natlang":"Superhero adventure movies sim=0.67","memelang":"movies description <=>\"superhero\">=0.67;_"},
+		{"natlang":"Classic westerns","memelang":"movies description <=>\"western\">=$sim;_"},
+		{"natlang":"Films with dystopian society narratives sim>.33","memelang":"movies description <=>\"dystopian\">0.33;_"},
+		{"natlang":"Show 15 newest movies","memelang":"movies year :dsc;_;%m lim 15"},
+		{"natlang":"top 8 oldest films","memelang":"movies year :asc;_;%m lim 8"},
+		{"natlang":"7 actor names Z-A","memelang":"actors name :dsc;_;%m lim 7"},
+		{"natlang":"lowest three movie ids","memelang":"movies id :asc;_;%m lim 3"},
+		{"natlang":"six actors with \"Jane\" in name ordered youngest first","memelang":"actors name ~\"Jane\";age :asc;%m lim 6"},
+		{"natlang":"surname Smith actors age asc top 5","memelang":"actors name ~\"Smith\";age :asc;%m lim 5"},
+		{"natlang":"name contains \"Zoe\" actors sort by age asc first 4","memelang":"actors name ~\"Zoe\";age :asc;%m lim 4"},
+		{"natlang":"3 youngest actors whose name matches 'Max'","memelang":"actors name ~\"Max\";age :asc;%m lim 3"},
+		{"natlang":"Top 15 titles up to and including 1979 by newest","memelang":"movies year :dsc<=1979;%m lim 15"},
+		{"natlang":"First 9 films from 1999 or later by oldest","memelang":"movies year :asc>=1999;%m lim 9"},
+		{"natlang":"role count for each actor","memelang":"roles actor :grp;id :cnt"},
+		{"natlang":"aggregate roles by actor (count)","memelang":"roles actor :grp;id :cnt"},
+		{"natlang":"aggregate rating totals per movie","memelang":"roles movie :grp;rating :sum"},
+		{"natlang":"cumulative ratings by movie","memelang":"roles movie :grp;rating :sum"},
+		{"natlang":"ratings summed by movie","memelang":"roles movie :grp;rating :sum"},
+		{"natlang":"Films per year at or before 1988","memelang":"movies year :grp<=1988;id :cnt"},
+		{"natlang":"Counts of roles for movies with \"King\" in the title","memelang":"roles movie :grp~\"King\";id :cnt"},
+		{"natlang":"Actors per name containing \"Alex\"","memelang":"actors name :grp~\"Alex\";id :cnt"},
+		{"natlang":"Movies per title with the word \"Moon\"","memelang":"movies title :grp~\"Moon\";id :cnt"},
+		{"natlang":"Sum of ratings per actor, high to low","memelang":"roles actor :grp;rating :sum:dsc"},
+		{"natlang":"role counts per actor A-Z","memelang":"roles actor :grp:asc;id :cnt"},
+		{"natlang":"actor role totals Z-A","memelang":"roles actor :grp:dsc;id :cnt"},
+		{"natlang":"actors ranked by role count high to low","memelang":"roles actor :grp;id :cnt:dsc"},
+		{"natlang":"movies Z-A with max role rating","memelang":"roles movie :grp:dsc;rating :max"},
+		{"natlang":"movies z-a with spread proxy (max)","memelang":"roles movie :grp:dsc;rating :max"},
+		{"natlang":"Film totals per year from 2001 onward, years ascending","memelang":"movies year :grp:asc>=2001;id :cnt"},
+		{"natlang":"Titles A-Z that include \"Star\", with counts","memelang":"movies title :grp:asc~\"Star\";id :cnt"},
+		{"natlang":"Genre drama grouped A-Z with film counts","memelang":"movies genre :grp:asc=\"drama\";id :cnt"},
+		{"natlang":"Actor age groups 65 and older, ages high to low","memelang":"actors age :grp:dsc>=65;id :cnt"},
+		{"natlang":"Year groups greater than 2018, sorted high to low with film counts","memelang":"movies year :grp:dsc>2018;id :cnt"},
+		{"natlang":"Age exactly 33 grouped for actors, ages high to low","memelang":"actors age :grp:dsc=33;id :cnt"},
+		{"natlang":"actor workload by count, low to high","memelang":"roles actor :grp;id :cnt:asc"},
+		{"natlang":"star averages by rating, descending","memelang":"roles actor :grp;rating :avg:dsc"},
+		{"natlang":"Films whose minimum rating is not equal to 2","memelang":"roles movie :grp;rating :min!=2"},
+		{"natlang":"Actors sorted A-Z, total rating > 12","memelang":"roles actor :grp:asc;rating :sum>12"},
+		{"natlang":"Movie titles descending with max role rating < 2.0","memelang":"roles movie :grp:dsc;rating :max<2.0"},
+		{"natlang":"Movies alphabetically, minimum role rating > 1.0","memelang":"roles movie :grp:asc;rating :min>1.0"},
+		{"natlang":"actor  movie title","memelang":"roles actor _;movie @"},
+		{"natlang":"Roles of actors over 60","memelang":"actors age >60;name _;roles actor @;_"},
+		{"natlang":"ROLES OF ACTORS AT MOST 12","memelang":"actors age <=12;name _;roles actor @;_"},
+		{"natlang":"roles for actors exactly 50","memelang":"actors age 50;name _;roles actor @;_"},
+		{"natlang":"Co-performers opposite Leonardo DiCaprio","memelang":"roles actor :$a~\"Leonardo DiCaprio\";movie _;@ @ @;actor !$a"},
+		{"natlang":"Actors who worked with Robert De Niro or Al Pacino","memelang":"roles actor :$a~\"Robert De Niro\",\"Al Pacino\";movie _;@ @ @;actor !$a"},
+		{"natlang":"Co-stars with higher ratings of actors named 'Mark' rated over 1","memelang":"roles actor :$a~\"Mark\";rating :$r>1;movie _;@ @ @;actor !$a;rating >$r"},
+		{"natlang":"Role counts for movies with \"Star\" in the title, highest first","memelang":"roles movie :grp~\"Star\";id :cnt:dsc"},
+		{"natlang":"Sports underdog films (sim > 0.5) by max role rating top 6","memelang":"movies description <=>\"sports underdog\">0.5;title :grp;roles movie @;rating :max:dsc;%m lim 6"},
+	]
+}
 
 import random, re, json, sys
 from typing import List, Iterator, Iterable, Dict, Tuple, Union
@@ -242,7 +346,7 @@ def lex(src: Memelang) -> Iterator[Token]:
 	for m in MASTER_PATTERN.finditer(src):
 		kind = m.lastgroup
 		if kind in IGNORE_KINDS: continue
-		if kind=='MISMATCH': raise Err('E_TOK')
+		if kind=='MISMATCH': raise Err(f'E_TOK {m}')
 		yield Token(kind, m.group())
 
 
@@ -277,7 +381,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 		# CMP
 		if tokens.peek() in VOCAB[mode]['CMP']:
 			axis.opr=tokens.next()
-			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_CMP_DAT')
+			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err(f'E_CMP_DAT {tokens.next()}')
 
 		# RIGHT
 		while tokens.peek() in VOCAB[mode]['DAT']:
@@ -313,13 +417,14 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			if mat: yield mat.check()
 			mat, vec = Matrix(), Vector()
 			tokens.next()
+			mode = Q
 			continue
 
 		if tokens.peek()=='SA':
 			tokens.next()
 			continue
 
-		raise Err('E_TOK')
+		raise Err(f'E_TOK {tokens.next()}')
 
 	if vec: 
 		vec.mode=mode
@@ -379,90 +484,8 @@ class Meme(Node):
 		return Token('EMB', out)
 
 
-# GENERATE RANDOM MEMELANG DATA
-class Fuzz():
-	@staticmethod
-	def dat(kind:str) -> Memelang:
-		if kind=='ALNUM': return ''.join(random.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWMYZ') for _ in range(5))
-		if kind=='QUOT': return json.dumps(''.join(random.choice(' -_+,./<>[]{}\'"!@#$%^&*()abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWMYZ') for _ in range(10)))
-		if kind=='DEC': return str(random.uniform(-9, 9))
-		if kind=='VAR': return SIGIL + Fuzz.dat('ALNUM')
-		if kind=='EMB': return '[' + ','.join([str(random.uniform(0,1)) for _ in range(4)]) + ']'
-
-	@staticmethod
-	def left(mode: str) -> Memelang:
-		left = ''
-		if mode=='VEC': left += random.choice(['<=>','<->','<#>']) + Fuzz.dat('EMB') 
-		return left
-
-	@staticmethod
-	def term(mode: str) -> Memelang:
-		if mode=='NUM':
-			term = Fuzz.dat('DEC')
-			if random.randint(0,1): term += random.choice(['+','-','*','/']) + Fuzz.dat('DEC')
-		elif mode=='STR': term = random.choice([Fuzz.dat('QUOT'), Fuzz.dat('ALNUM')])
-		elif mode=='VEC': term = Fuzz.dat('EMB')
-		return term
-
-	@staticmethod
-	def right(mode: str) -> Memelang:
-		if mode=='STR': return OR.join(Fuzz.term(mode) for _ in range(random.randint(1,5)))
-		else: return Fuzz.term(mode)
-
-	@staticmethod
-	def axis(bind: List[str]|None = None) -> Memelang:
-		if not bind: bind = []
-
-		mode: str
-		data: Memelang = ''
-
-		comp = random.choice(['=','!=','>','<','<=','>='])
-
-		if comp in {'<','<=','>','>='}: mode = 'NUM' if random.randint(0, 3) else 'VEC'
-		else: mode='STR'
-
-		return Fuzz.left(mode) + comp + Fuzz.right(mode)
-
-	@staticmethod
-	def sql_vec(join:bool=False) -> Memelang:
-		return ('' if not join else (Fuzz.dat('ALNUM') + SA)) + Fuzz.dat('ALNUM') + SA + Fuzz.axis();
-
-	@staticmethod
-	def sql_mat(col_len:int = 5) -> Memelang:
-		return Fuzz.sql_vec(True) + SV.join(Fuzz.sql_vec(False) for _ in range(col_len-1)) + SM
-
-
 
 ### SQL ### 
-
-'''
-1. ex TABLE DEFINITIONS
-%d roles id :TYP=INT; >0; rating :TYP=DEC; >0; <=5; actor :TYP=STR; movie :TYP=STR;;
-%d actors id :TYP=INT; >0; name :TYP=STR; age :TYP=INT; >=0; <200;;
-%d movies id :TYP=INT; >0; description :TYP=STR; year >1800; <2100; genre scifi,drama,comedy,documentary;;
-
-2. ex QUERY
-MEMELANG: roles actor "Mark Hamill",Mark; movie _; rating >4;;
-SQL: SELECT t0.actor, t0.movie, t0.rating FROM roles as t0 WHERE (t0.actor = 'Mark Hamill' or t0.actor = 'Mark') AND t0.rating > 4;
-
-3. ex JOIN
-MEMELANG: roles id _; actor :$a="Mark Hamill"; movie _; @ @ @; actor !$a;;
-SQL: SELECT t0.id, t0.actor, t0.movie, t1.movie, t1.actor FROM roles AS t0, roles AS t1 WHERE t0.actor = 'Mark Hamill' AND t1.id!=t0.id AND t1.movie = t0.movie;
-
-4. ex TABLE JOIN WHERE ACTOR NAME = MOVIE TITLE
-MEMELANG: actors id _; age >21; <30; name _; roles movie @;;
-MEMELANG(2): actors id _; age >21; <30; name:$n; roles movie $n;;
-SQL: SELECT t0.id, t0.name, t0.age, t1.movie FROM actors AS t0, roles AS t1 WHERE t0.age > 21 AND t0.age < 30 AND t1.movie = t0.name;
-
-5. ex EMBEDDING
-MEMELANG: movies id _; description <=>"war":dsc>0.5; year >2005; %m lim 10; beg 100;;
-MEMELANG(2): movies id _; description <=>[0.1,0.2,0.3]:dsc>0.5; year >2005; %m lim 10; beg 100;;
-SQL: SELECT t0.id, t0.description<=>[0.1,0.2,0.3]::VECTOR, t0.year from movies AS t0 WHERE t0.description<=>[0.1,0.2,0.3]::VECTOR>0.5 AND t0.year>2005 ORDER BY t0.description<=>[0.1,0.2,0.3]::VECTOR DESC LIMIT 10 OFFSET 100;
-
-6. ex AGGREGATION
-MEMELANG: roles rating :avg; actor :grp="Mark Hamill","Carrie Fisher";;
-SQL: SELECT AVG(t0.rating), t0.actor FROM roles AS t0 WHERE (t0.actor = 'Mark Hamill' OR t0.actor = 'Carrie Fisher') GROUP BY t0.actor;
-'''
 
 ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
 PH, EPH = '%s', ' = %s'
@@ -692,4 +715,9 @@ if __name__ == "__main__":
 			print(str(meme.select()[0]))
 			print()
 		print('SUCCESS')
-	else: raise Err('E_ARG')
+	else:
+		for ex in examples['examples']:
+			meme = MemePGSQL(ex['memelang'])
+			print('// '+str(ex['natlang']))
+			print(str(meme))
+			print()
