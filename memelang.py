@@ -6,12 +6,12 @@ ONE OR MORE WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.37
+MEMELANG_VER = 9.38
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
 examples = {
-	"schema":"%d roles id :ROL=UNI;:TYP=INT;>0;rating :DESC=\"Decimal 0-5 star rating of performance\";:TYP=DEC;>0;<=5;actor :DESC=\"Actor's full name\";:TYP=STR;movie :DESC=\"Movie's full name\";:TYP=STR;;%d actors id :ROL=UNI;:TYP=INT;>0;name :DESC=\"Actor's full name\";:TYP=STR;age :DESC=\"Actor's age in years\";:TYP=INT;>=0;<200;;%d movies id :ROL=UNI;:TYP=INT;>0;description :DESC=\"Brief description of movie plot\";:TYP=STR;year :DESC=\"Year of production AD\";:TYP=INT;>1800;<2100;genre scifi,drama,comedy,documentary;:TYP=STR;title :DESC=\"Full movie title\";:TYP=STR;;%for actors name _;roles actor @;;%for movies title _;roles movie @;;",
+	"schema":"%tab roles id :ROL=UNI;:TYP=INT;>0;rating :DESC=\"Decimal 0-5 star rating of performance\";:TYP=DEC;>0;<=5;actor :DESC=\"Actor's full name\";:TYP=STR;movie :DESC=\"Movie's full name\";:TYP=STR;;%tab actors id :ROL=UNI;:TYP=INT;>0;name :DESC=\"Actor's full name\";:TYP=STR;age :DESC=\"Actor's age in years\";:TYP=INT;>=0;<200;;%tab movies id :ROL=UNI;:TYP=INT;>0;description :DESC=\"Brief description of movie plot\";:TYP=STR;year :DESC=\"Year of production AD\";:TYP=INT;>1800;<2100;genre scifi,drama,comedy,documentary;:TYP=STR;title :DESC=\"Full movie title\";:TYP=STR;;%for actors name _;roles actor @;;%for movies title _;roles movie @;;",
 	"examples": [
 		{"natlang":"All movies","memelang":"movies _ _"},
 		{"natlang":"all columns for roles","memelang":"roles _ _"},
