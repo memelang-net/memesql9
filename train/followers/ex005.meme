@@ -1,0 +1,146 @@
+// unique signup times in users
+users created_at :grp;;
+
+// unique locations in profiles
+profiles location :grp;;
+
+// distinct websites in profiles
+profiles website :grp;;
+
+// unique visibilities in posts
+posts visibility :grp;;
+
+// authors in posts, unique
+posts user_id :grp;;
+
+// unique post ids with comments
+comments post_id :grp;;
+
+// unique liked posts in likes
+likes post_id :grp;;
+
+// distinct followers in follows
+follows follower_id :grp;;
+
+// distinct user ids that have send a message
+messages sender_id :grp;;
+
+// earliest post time by author
+posts body _;created_at :min;user_id :grp;;
+
+// earliest comment time by parent post
+comments body _;created_at :min;post_id :grp;;
+
+// earliest follow time by follower
+follows id _;created_at :min;follower_id :grp;;
+
+// earliest profile update by user
+profiles full_name _;updated_at :min;user_id :grp;;
+
+// earliest message time by sender
+messages body _;created_at :min;sender_id :grp;;
+
+// oldest birthday by location
+profiles full_name _;birthday :min;location :grp;;
+
+// lowest user id by email
+users username _;id :min;email :grp;;
+
+// earliest post update by visibility
+posts image_url _;updated_at :min;visibility :grp;;
+
+// lowest comment id by user
+comments body _;id :min;user_id :grp;;
+
+// earliest like time by post
+likes id _;created_at :min;post_id :grp;;
+
+// latest post time by author
+posts body _;created_at :max;user_id :grp;;
+
+// latest comment time by parent post
+comments body _;created_at :max;post_id :grp;;
+
+// latest follow time by follower
+follows id _;created_at :max;follower_id :grp;;
+
+// latest profile update by user
+profiles full_name _;updated_at :max;user_id :grp;;
+
+// latest message time by recipient
+messages body _;created_at :max;recipient_id :grp;;
+
+// youngest birthday by location
+profiles full_name _;birthday :max;location :grp;;
+
+// highest user id by email
+users username _;id :max;email :grp;;
+
+// latest post update by visibility
+posts image_url _;updated_at :max;visibility :grp;;
+
+// highest comment id by user
+comments body _;id :max;user_id :grp;;
+
+// latest like time by post
+likes id _;created_at :max;post_id :grp;;
+
+// average post id by author
+posts body _;id :avg;user_id :grp;;
+
+// average comment id by parent post
+comments body _;id :avg;post_id :grp;;
+
+// average follower_id by followee
+follows id _;follower_id :avg;followee_id :grp;;
+
+// average liker user_id by post
+likes id _;user_id :avg;post_id :grp;;
+
+// average sender_id by recipient
+messages body _;sender_id :avg;recipient_id :grp;;
+
+// average profile user_id by location
+profiles full_name _;user_id :avg;location :grp;;
+
+// average user id by signup time
+users username _;id :avg;created_at :grp;;
+
+// average post id by visibility
+posts image_url _;id :avg;visibility :grp;;
+
+// average commenter user_id by post
+comments body _;user_id :avg;post_id :grp;;
+
+// average like id by user
+likes created_at _;id :avg;user_id :grp;;
+
+// count posts by author
+posts body _;id :cnt;user_id :grp;;
+
+// count comments by parent post
+comments body _;id :cnt;post_id :grp;;
+
+// count follows by follower
+follows created_at _;id :cnt;follower_id :grp;;
+
+// count follows by followee
+follows created_at _;id :cnt;followee_id :grp;;
+
+// count likes by post
+likes created_at _;id :cnt;post_id :grp;;
+
+// count likes by user
+likes post_id _;id :cnt;user_id :grp;;
+
+// count messages by sender
+messages body _;id :cnt;sender_id :grp;;
+
+// count messages by recipient
+messages body _;id :cnt;recipient_id :grp;;
+
+// count users by signup time
+users username _;id :cnt;created_at :grp;;
+
+// count profiles by location
+profiles full_name _;id :cnt;location :grp;;

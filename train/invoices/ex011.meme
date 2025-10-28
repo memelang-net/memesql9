@@ -1,0 +1,147 @@
+// Newest customers named Ann from 2024, page 3 of 20 per page
+customers created :dsc>=2024-01-01;<=2024-12-31;name ~"Ann";_;%m lim 20;%m beg 40;;
+
+// Active cables priced 25 to 150 sorted by name then price, limit 30
+products active 1;name ~"Cable";unit_price >=25;<=150;name :asc;unit_price :asc;_;%m lim 30;;
+
+// Open invoices with totals between 300 and 1200, earliest due dates first and newest issue dates as tie-breaker
+invoices status open;total >=300;<=1200;due_date :asc;invoice_date :dsc;_;;
+
+// Items for customer 101 on 2025-09-05 with quantity 2 to 8, rank by line total high to low
+invoices invoice_date 2025-09-05;customer_id 101;id _;invoice_items invoice_id @;quantity >=2;<=8;line_total :dsc;_;;
+
+// Top 10 customers by total billed in February 2025, include customer names
+invoices invoice_date >=2025-02-01;<=2025-02-28;total :sum:dsc;customer_id :grp;customers id @;name _;%m lim 10;;
+
+// Invoice status counts on 2024-12-31 sorted ascending
+invoices invoice_date 2024-12-31;id :cnt:asc;status :grp;;
+
+// Active products created on 2025-03-10 similar to 'wireless mouse pro' with similarity at least 0.7, order by closeness
+products name <=>"wireless mouse pro":dsc>=0.7;created 2025-03-10;active 1;_;;
+
+// On 2025-06-15, items mentioning USB with average line total per product, highest first, show product names
+invoices invoice_date 2025-06-15;id _;invoice_items invoice_id @;description ~"USB";line_total :avg:dsc;product_id :grp;products id @;name _;;
+
+// Items on 2024-12-24 with quantity 1 to 5 for products whose SKU contains HDMI, order by item unit price descending
+invoices invoice_date 2024-12-24;id _;invoice_items invoice_id @;quantity >=1;<=5;unit_price :dsc;product_id _;products id @;sku ~"HDMI";_;;
+
+// In November 2024, maximum item quantity per invoice for Cable lines, highest first, include invoice numbers
+invoices invoice_date >=2024-11-01;<=2024-11-30;id _;invoice_items invoice_id @;description ~"Cable";quantity :max:dsc;invoice_id :grp;invoices id @;invoice_no _;;
+
+// Customers created on 2025-01-01 with phone starting 212- and name containing Chen, alphabetize by name
+customers created 2025-01-01;phone ~"212-";name ~"Chen";name :asc;_;;
+
+// Overdue invoices on 2025-04-15 for customers named like Olsen, totals high to low
+customers name ~"Olsen";id _;invoices customer_id @;status overdue;invoice_date 2025-04-15;total :dsc;_;;
+
+// On 2025-09-09, active products by average item unit price per product, highest first with product names
+invoices invoice_date 2025-09-09;id _;invoice_items invoice_id @;unit_price :avg:dsc;product_id :grp;products id @;active 1;name _;;
+
+// On 2025-10-01, sum of tax grouped by due date, ascending totals
+invoices invoice_date 2025-10-01;tax :sum:asc;due_date :grp;;
+
+// On 2025-03-03, product SKUs by total item quantities, top 8
+invoices invoice_date 2025-03-03;id _;invoice_items invoice_id @;quantity :sum:dsc;product_id :grp;products id @;sku _;%m lim 8;;
+
+// Customers similar to 'Acme Holdings' created on 2024-08-08, ordered by similarity
+customers name <=>"Acme Holdings":dsc>=0.65;created 2024-08-08;_;;
+
+// Paid invoices on 2025-02-14 summed by status, smallest first
+invoices status paid;invoice_date 2025-02-14;total :sum:asc;status :grp;;
+
+// On 2025-05-31, items with line total at least 100, maximum quantity per product, highest first, show product names
+invoices invoice_date 2025-05-31;id _;invoice_items invoice_id @;line_total >=100;quantity :max:dsc;product_id :grp;products id @;name _;;
+
+// Customers from 2024-07-07 ordered by email Z-A, first 25
+customers created 2024-07-07;email :dsc;_;%m lim 25;;
+
+// Products priced 0 created on 2025-01-05 with name including Test, SKU ascending
+products unit_price 0;created 2025-01-05;name ~"Test";sku :asc;_;;
+
+// Open invoices totaling 200 to 900 issued on 2025-12-12, newest due dates first
+invoices status open;total >=200;<=900;invoice_date 2025-12-12;due_date :dsc;_;;
+
+// Customers with at least 4 invoices in September 2024, names Z-A
+invoices invoice_date >=2024-09-01;<=2024-09-30;id :cnt>=4;customer_id :grp;customers id @;name :dsc;;
+
+// Products with 'Pro' in the name created on 2025-02-02, item counts per product descending, include product names
+products name ~"Pro";created 2025-02-02;id _;invoice_items product_id @;id :cnt:dsc;product_id :grp;products id @;name _;;
+
+// For customers with emails containing .io, top 12 invoice numbers by summed tax on 2024-06-06
+customers email ~".io";id _;invoices customer_id @;invoice_date 2024-06-06;tax :sum:dsc;invoice_no :grp;%m lim 12;;
+
+// Customers similar to Acme Holdings made on 2024-03-03, sort by similarity, top 10
+customers name <=>"Acme Holdings":dsc;created 2024-03-03;_;%m lim 10;;
+
+// Active products with Dock in the name priced 25 to 150, price low to high then name A-Z
+products active 1;name ~"Dock";unit_price >=25;<=150;unit_price :asc;name :asc;_;;
+
+// On 2025-02-14, total invoice amount by customer, highest first with customer name
+invoices invoice_date 2025-02-14;total :sum:dsc;customer_id :grp;customers id @;name _;;
+
+// 2025-04-01 items on invoices where unit price >= 10 and description has Cable, counts per invoice, sort count desc
+invoices invoice_date 2025-04-01;id _;invoice_items invoice_id @;unit_price >=10;description ~"Cable";id :cnt:dsc;invoice_id :grp;;
+
+// Open invoices on 2024-06-01 with total between 200 and 900, order total high to low and invoice number A-Z
+invoices status open;total >=200;<=900;invoice_date 2024-06-01;total :dsc;invoice_no :asc;_;;
+
+// 2024-08-15 average line totals per product for items with quantity at least 3, sorted high to low with product name
+invoices invoice_date 2024-08-15;id _;invoice_items invoice_id @;quantity >=3;line_total :avg:dsc;product_id :grp;products id @;name _;;
+
+// Products created on or before 2023-05-01 named like Pro, SKU Z-A, limit 15 starting at 15
+products created <=2023-05-01;name ~"Pro";sku :dsc;_;%m lim 15;%m beg 15;;
+
+// Customer emails ending @example.org created on 2022-12-31, names A-Z
+customers email ~"@example.org";created 2022-12-31;name :asc;_;;
+
+// September 2024 tax sums by invoice status, smallest sums first
+invoices invoice_date >=2024-09-01;<=2024-09-30;tax :sum:asc;status :grp;;
+
+// Top 10 SKUs by maximum item unit price on invoices dated 2025-03-31
+invoices invoice_date 2025-03-31;id _;invoice_items invoice_id @;unit_price :max:dsc;product_id :grp;products id @;sku _;%m lim 10;;
+
+// Customers named like Kim with paid invoices on 2025-07-07, invoice numbers A-Z
+customers name ~"Kim";id _;invoices customer_id @;status paid;invoice_date 2025-07-07;invoice_no :asc;_;;
+
+// Customers close to Bright Labs International on 2023-07-07, similarity at least 0.7, page 2 of 10
+customers name <=>"Bright Labs International":dsc>=0.7;created 2023-07-07;_;%m lim 10;%m beg 10;;
+
+// Overdue invoices due 2025-10-10 for customer 315, sort by due date then total desc
+invoices status overdue;due_date 2025-10-10;customer_id 315;due_date :asc;total :dsc;_;;
+
+// On 2024-04-04, item quantity sums by product for descriptions containing Adapter, highest first, include product name
+invoices invoice_date 2024-04-04;id _;invoice_items invoice_id @;description ~"Adapter";quantity :sum:dsc;product_id :grp;products id @;name _;;
+
+// 2025-05-05 average invoice total per customer for totals >= 100, sort high to low with names
+invoices invoice_date 2025-05-05;total >=100;total :avg:dsc;customer_id :grp;customers id @;name _;;
+
+// HDMI products created 2025-03-03 with average item line total per product, high to low with product name
+products name ~"HDMI";created 2025-03-03;id _;invoice_items product_id @;line_total :avg:dsc;product_id :grp;products id @;name _;;
+
+// Invoices on 2024-02-29 with subtotal 100..1000, order tax low to high then total high to low
+invoices invoice_date 2024-02-29;subtotal >=100;<=1000;tax :asc;total :dsc;_;;
+
+// First 25 customers from 2021-09-09 with phone starting 212-, names Z-A
+customers phone ~"212-";created 2021-09-09;name :dsc;_;%m lim 25;;
+
+// October 2025 invoice status counts where count >= 5, sort ascending
+invoices due_date >=2025-10-01;<=2025-10-31;id :cnt:asc>=5;status :grp;;
+
+// On 2025-12-25, maximum invoice total per issue date, latest dates first
+invoices invoice_date 2025-12-25;total :max;invoice_date :grp:dsc;;
+
+// Item descriptions A-Z for customers with emails ending @northco.com on invoices dated 2024-09-09
+customers email ~"@northco.com";id _;invoices customer_id @;invoice_date 2024-09-09;id _;invoice_items invoice_id @;description :asc;_;;
+
+// Active products similar to thunderbolt dock on 2025-02-02, threshold 0.65, SKU ascending, first 12
+products name <=>"thunderbolt dock":dsc>=0.65;active 1;created 2025-02-02;sku :asc;_;%m lim 12;;
+
+// Customers with at least 2 invoices on 2024-01-31, names alphabetically
+invoices invoice_date 2024-01-31;id :cnt>=2;customer_id :grp;customers id @;name :asc;;
+
+// On 2025-06-06, summed item line totals by invoice for items mentioning USB, smallest first with invoice number
+invoices invoice_date 2025-06-06;id _;invoice_items invoice_id @;description ~"USB";line_total :sum:asc;invoice_id :grp;invoices id @;invoice_no _;;
+
+// Top 8 customers by summed tax on overdue invoices dated 2025-09-01, include customer name
+invoices status overdue;invoice_date 2025-09-01;tax :sum:dsc;customer_id :grp;customers id @;name _;%m lim 8;%m beg 0;;
+

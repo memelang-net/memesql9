@@ -1,0 +1,126 @@
+// Profiles of people followed by username "mira"
+users username "mira";id _;follows follower_id @;followee_id _;profiles user_id @;_;;
+
+// Usernames who liked posts by "alex" on 2025-01-01
+users username "alex";id _;posts user_id @;id _;likes post_id @;created_at =2025-01-01;user_id _;users id @;username _;;
+
+// Comment texts on posts by "sara" since 2025-07-01
+users username "sara";id _;posts user_id @;id _;comments post_id @;created_at >=2025-07-01;body _;;
+
+// Message bodies sent by users followed by "ava" on 2025-06-01
+users username "ava";id _;follows follower_id @;followee_id _;messages sender_id @;created_at =2025-06-01;body _;;
+
+// Avatars of authors of comments on post 101
+posts id 101;comments post_id @;user_id _;users id @;id _;profiles user_id @;avatar_url _;;
+
+// Thread replies under comment 880100 with author usernames
+comments id 880100;id _;comments parent_comment_id @;user_id _;users id @;username _;;
+
+// Images in posts liked by "liam" during 2024-12-01
+users username "liam";id _;likes user_id @;created_at =2024-12-01;post_id _;posts id @;image_url _;;
+
+// Bios for followers of "sophia"
+users username "sophia";id _;follows followee_id @;follower_id _;users id @;profiles user_id @;bio _;;
+
+// Bodies of posts commented on by "james" in 2025
+users username "james";id _;comments user_id @;created_at >=2025-01-01;<=2025-12-31;post_id _;posts id @;body _;;
+
+// Users who messaged "emily" on 2025-03-10
+users username "emily";id _;messages recipient_id @;created_at =2025-03-10;sender_id _;users id @;username _;;
+
+// Websites of people who like "oliver" posts
+users username "oliver";id _;posts user_id @;id _;likes post_id @;user_id _;users id @;id _;profiles user_id @;website _;;
+
+// Usernames of repliers to comment 5001
+comments id 5001;id _;comments parent_comment_id @;user_id _;users id @;username _;;
+
+// Followers of users located in Berlin
+profiles location "Berlin";user_id _;follows followee_id @;follower_id _;users id @;username _;;
+
+// Images liked by commenters on post 77
+comments post_id 77;user_id _;likes user_id @;post_id _;posts id @;image_url _;;
+
+// Senders who messaged "mia" after 2025-04-01
+users username "mia";id _;messages recipient_id @;created_at >2025-04-01;sender_id _;users id @;username _;;
+
+// People followed by commenters on "noah" posts
+users username "noah";id _;posts user_id @;id _;comments post_id @;user_id _;follows follower_id @;followee_id _;users id @;username _;;
+
+// Recipients messaged by users followed by "ava"
+users username "ava";id _;follows follower_id @;followee_id _;messages sender_id @;recipient_id _;users id @;username _;;
+
+// Avatars of followers of user id 42
+users id 42;follows followee_id @;follower_id _;profiles user_id @;avatar_url _;;
+
+// Bodies of replies to replies under comment 7300
+comments id 7300;id _;comments parent_comment_id @;id _;comments parent_comment_id @;body _;;
+
+// Authors of posts liked on 2025-02-14
+likes created_at =2025-02-14;post_id _;posts id @;user_id _;users id @;username _;;
+
+// Like counts per post for "mira" since 2025-01-01, high to low
+users username "mira";id _;posts user_id @;id :grp;likes post_id @;created_at >=2025-01-01;id :cnt:dsc;;
+
+// Comment counts per post for "alex" in 2025, high to low
+users username "alex";id _;posts user_id @;created_at >=2025-01-01;<=2025-12-31;id :grp;comments post_id @;id :cnt:dsc;;
+
+// Latest comment time per post for "sara" after 2025-07-01, newest first
+users username "sara";id _;posts user_id @;created_at >2025-07-01;id :grp;comments post_id @;created_at :max:dsc;;
+
+// Message counts by recipient for "ava" after 2025-03-01, recipients A-Z
+users username "ava";id _;messages sender_id @;created_at >2025-03-01;recipient_id :grp:asc;id :cnt;;
+
+// Latest message per recipient for "mia" since 2025-04-01, newest first
+users username "mia";id _;messages sender_id @;created_at >=2025-04-01;recipient_id :grp;created_at :max:dsc;;
+
+// Follower counts for users in Berlin, usernames A-Z
+profiles location "Berlin";user_id _;users id @;username :grp:asc;follows followee_id @;id :cnt;;
+
+// Followee counts for "noah", high to low
+users username "noah";id _;follows follower_id @;followee_id :grp;id :cnt:dsc;;
+
+// Commenter counts per post for "oliver" after 2025-02-01, high to low
+users username "oliver";id _;posts user_id @;id _;comments post_id @;created_at >=2025-02-01;post_id :grp;user_id :cnt:dsc;;
+
+// Comment counts per author on "oliver" posts after 2025-02-01, high to low
+users username "oliver";id _;posts user_id @;id _;comments post_id @;created_at >=2025-02-01;user_id :grp;id :cnt:dsc;;
+
+// Like counts per visibility on "alex" posts since 2025-05-01, visibility A-Z
+users username "alex";id _;posts user_id @;created_at >=2025-05-01;visibility :grp:asc;likes post_id @;id :cnt;;
+
+// Recipient counts for followers of "mira" since 2025-01-10, Z-A
+users username "mira";id _;follows follower_id @;followee_id _;messages sender_id @;created_at >=2025-01-10;recipient_id :grp:dsc;id :cnt;;
+
+// Latest post time per followee of "ava" on or before 2025-06-01, newest first
+users username "ava";id _;follows follower_id @;followee_id :grp;posts user_id @;created_at :max:dsc<=2025-06-01;;
+
+// Message counts by sender to "emily" after 2025-03-10, high to low
+users username "emily";id _;messages recipient_id @;created_at >2025-03-10;sender_id :grp;id :cnt:dsc;;
+
+// Oldest comment time per post for "noah" since 2024-01-01, posts ascending
+users username "noah";id _;posts user_id @;created_at >=2024-01-01;id :grp:asc;comments post_id @;created_at :min;;
+
+// Like counts on posts by Berlin users since 2025-01-01, high to low
+profiles location "Berlin";user_id _;posts user_id @;created_at >=2025-01-01;id :grp;likes post_id @;id :cnt:dsc;;
+
+// Like counts per liker on "mia" posts in 2025, high to low
+users username "mia";id _;posts user_id @;id _;likes post_id @;created_at >=2025-01-01;<=2025-12-31;user_id :grp;id :cnt:dsc;;
+
+// Reply counts per parent on post 77 after 2025-02-01, high to low
+posts id 77;id _;comments post_id @;created_at >=2025-02-01;parent_comment_id :grp;id :cnt:dsc;;
+
+// Latest message time per follower of "sophia" since 2025-08-01, newest first
+users username "sophia";id _;follows followee_id @;follower_id :grp;messages sender_id @;created_at :max:dsc>=2025-08-01;;
+
+// Post counts per followee for "liam" on or after 2024-12-01, followee ascending
+users username "liam";id _;follows follower_id @;followee_id :grp:asc;posts user_id @;id :cnt>=1;;
+
+// Recipient counts per sender among Paris users since 2025-05-01, high to low
+profiles location "Paris";user_id :grp;messages sender_id @;created_at >=2025-05-01;id :cnt:dsc;;
+
+// Follows profiles with the same location
+profiles location :$l;user_id _;follows followee_id @;profiles user_id @;location $l;_;;
+
+// Co-likers on the same post excluding the original liker
+likes user_id :$u;post_id _;@ @ @;user_id !$u;users id @;username _;;
+

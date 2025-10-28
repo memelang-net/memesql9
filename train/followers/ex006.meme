@@ -1,0 +1,174 @@
+// posts since 2024-01-01, count by author
+posts body _;created_at >=2024-01-01;id :cnt;user_id :grp;;
+
+// users updated by 2025-07-04, count by email
+users username _;updated_at <=2025-07-04;id :cnt;email :grp;;
+
+// count profiles with location like San, by website
+profiles full_name _;location ~"San";user_id :cnt;website :grp;;
+
+// comments since 2024-06-01, minimum id by post
+comments body _;created_at >=2024-06-01;id :min;post_id :grp;;
+
+// likes since 2024-01-15, maximum id by post
+likes id _;created_at >=2024-01-15;id :max;post_id :grp;;
+
+// follows with follower_id at least 100, followee count
+follows id _;follower_id >=100;id :cnt;followee_id :grp;;
+
+// messages that are read by recipient count
+messages body _;read_flag =true;id :cnt;recipient_id :grp;;
+
+// public posts, earliest creation by author
+posts body _;visibility =public;created_at :min;user_id :grp;;
+
+// profiles born after 1990-01-01, sum user_id by location
+profiles full_name _;birthday >=1990-01-01;user_id :sum;location :grp;;
+
+// user count with .org email, by signup date
+users username _;email ~".org";id :cnt;created_at :grp;;
+
+// profiles grouped by Austin only, count user_id
+profiles full_name _;user_id :cnt;location :grp="Austin";;
+
+// count public posts
+posts body _;id :cnt;visibility :grp=public;;
+
+// comments grouped by post ids at least 100, count comments
+comments body _;id :cnt;post_id :grp>=100;;
+
+// likes grouped by post ids at most 1000, count likes
+likes id _;id :cnt;post_id :grp<=1000;;
+
+// follows count grouped by follower ids not 10
+follows id _;id :cnt;follower_id :grp!=10;;
+
+// messages grouped by recipient id at least 100
+messages body _;id :cnt;recipient_id :grp>=100;;
+
+// count profiles grouped by bio similar to travel
+profiles full_name _;id :cnt;bio <=>"travel":grp:dsc;;
+
+// users grouped by signups from 2024-01-01, count users
+users username _;id :cnt;created_at :grp>=2024-01-01;;
+
+// posts grouped by image URLs containing .png, count posts
+posts body _;id :cnt;image_url :grp~".png";;
+
+// users by email, for groups with count at least 2
+users username _;id :cnt>=2;email :grp;;
+
+// profiles by location, keep groups with at least 10 users
+profiles full_name _;id :cnt>=10;location :grp;;
+
+// post count by visibility, keep groups of at least 1000
+posts body _;id :cnt>=1000;visibility :grp;;
+
+// comments by post, keep groups with minimum id at least 100000
+comments body _;id :min>=100000;post_id :grp;;
+
+// likes by post with maximum id at most 5000
+likes id _;id :max<=5000;post_id :grp;;
+
+// follows by follower, keep groups with count at least 100
+follows id _;id :cnt>=100;follower_id :grp;;
+
+// messages by recipient, keep groups with count at most 50
+messages body _;id :cnt<=50;recipient_id :grp;;
+
+// profiles by birthday, keep groups with at least 100
+profiles full_name _;id :cnt>=100;birthday :grp;;
+
+// users by signup date, keep groups with count at least 5
+users username _;id :cnt>=5;created_at :grp;;
+
+// posts by author, keep groups with latest creation at least 2024-06-01
+posts body _;created_at :max>=2024-06-01;user_id :grp;;
+
+// users sorted groups with .com, count ids
+users username _;id :cnt;email :grp:asc~".com";;
+
+// profiles sorted groups by Austin, count user_id
+profiles full_name _;user_id :cnt;location :grp:dsc="Austin";;
+
+// posts sorted groups by public, count ids
+posts body _;id :cnt;visibility :grp:asc=public;;
+
+// comments sorted groups with post ids at least 100, count ids
+comments body _;id :cnt;post_id :grp:dsc>=100;;
+
+// likes sorted groups with post ids at most 1000, count ids
+likes id :cnt;post_id :grp:asc<=1000;;
+
+// followers sorted groups not follower 10
+follows id :cnt;follower_id :grp:asc!=10;;
+
+// messages sorted groups recipients at least 100, counts under 1001
+messages body _;id :cnt<1001;recipient_id :grp:dsc>=100;;
+
+// profiles sort by bio similarity to travel, count user_id
+profiles full_name _;user_id :cnt;bio <=>"travel":grp:dsc;;
+
+// users sorted groups signups from 2024-01-01, count ids
+users username _;id :cnt;created_at :grp:asc>=2024-01-01;;
+
+// posts sorted groups image URLs containing .png, count ids
+posts body _;id :cnt;image_url :grp:dsc~".png";;
+
+// users by email, sort counts descending, keep at least 5
+users username _;id :cnt:dsc>=5;email :grp;;
+
+// profiles by location, sort counts ascending, keep at least 10
+profiles full_name _;user_id :cnt:asc>=10;location :grp;;
+
+// posts by visibility, sort descending, keep at least 1000
+posts body _;id :cnt:dsc>=1000;visibility :grp;;
+
+// comments by post, sort minima ascending, keep at least 10
+comments body _;id :min:asc>=10;post_id :grp;;
+
+// likes by post, sort maxima descending, keep at most 5000
+likes id _;id :max:dsc<=5000;post_id :grp;;
+
+// follows by follower, sort ascending, keep at least 100
+follows id _;id :cnt:asc>=100;follower_id :grp;;
+
+// messages by recipient, sort counts descending, keep at most 50
+messages body _;id :cnt:dsc<=50;recipient_id :grp;;
+
+// profiles by birthday, sort descending, keep at least 100
+profiles full_name _;user_id :cnt:dsc>=100;birthday :grp;;
+
+// users by signup date, sort counts ascending, keep at least 5
+users username _;id :cnt:asc>=5;created_at :grp;;
+
+// posts by author, sort latest creation descending, keep at least 2024-06-01
+posts body _;created_at :max:dsc>=2024-06-01;user_id :grp;;
+
+// per post, project comment and like counts
+comments id :cnt;post_id :grp;likes post_id @;likes id :cnt;;
+
+// per user, project post count and like count
+posts id :cnt;user_id :grp;likes user_id @;likes id :cnt;;
+
+// per user, project sent message count and latest post time
+messages id :cnt;sender_id :grp;posts user_id @;posts created_at :max;;
+
+// per post, project earliest comment time and like count
+comments created_at :min;post_id :grp;likes post_id @;likes id :cnt;;
+
+// per user, project profile last update and post count
+profiles updated_at :max;user_id :grp;posts user_id @;posts id :cnt;;
+
+// per user, project comments count and likes count
+comments id :cnt;user_id :grp;likes user_id @;likes id :cnt;;
+
+// per post, project comments count and latest comment time
+comments id :cnt;created_at :max;post_id :grp;;
+
+// per user, project follower count and followee post count
+follows id :cnt;followee_id :grp;posts user_id @;posts id :cnt;;
+
+// per user, project received message count and like count
+messages id :cnt;recipient_id :grp;likes user_id @;likes id :cnt;;
+

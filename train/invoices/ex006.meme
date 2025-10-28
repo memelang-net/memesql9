@@ -1,0 +1,174 @@
+// Daily invoice counts for 2025-09-01..2025-09-07 (highest first)
+invoices invoice_date :grp>=2025-09-01;<=2025-09-07;id :cnt:dsc;;
+
+// Products with sum of quantities sold at least 50 in 2025-08 (product id ascending)
+invoices invoice_date >=2025-08-01;<=2025-08-31;id _;invoice_items invoice_id @;quantity :sum>=50;product_id :asc;product_id :grp;;
+
+// Open invoices for customers named like 'Garcia' with subtotal < 100, newest first
+customers name ~"Garcia";id _;invoices customer_id @;status open;subtotal <100;invoice_date :dsc;_;;
+
+// Invoice items for products with SKU containing 'QX' on 2025-06-20, quantity 2..5
+products sku ~"QX";id _;invoice_items product_id @;quantity >=2;<=5;invoice_id _;invoices id @;invoice_date 2025-06-20;;
+
+// Statuses by count of invoices in 2025-10 where count >= 25 (desc)
+invoices invoice_date >=2025-10-01;<=2025-10-31;id :cnt:dsc>=25;status :grp;;
+
+// Customers with minimum invoice total at least 200 in Q3 2025 (A-Z by name)
+invoices invoice_date >=2025-07-01;<=2025-09-30;total :min>=200;customer_id :grp;customers id @;name :asc;;
+
+// Earliest 12 invoices by due_date with tax = 0 and totals < 200
+invoices tax 0;total <200;due_date :asc;_;%m lim 12;;
+
+// 'Apex LLC' paid invoices on 2025-05-05 with items described like 'setup' (products A-Z)
+customers name "Apex LLC";id _;invoices customer_id @;status paid;invoice_date 2025-05-05;id _;invoice_items invoice_id @;description ~"setup";product_id _;products id @;name :asc;;
+
+// Top 10 invoice dates by sum of totals where sum >= 2000 in 2025-09
+invoices invoice_date >=2025-09-01;<=2025-09-30;total :sum:dsc>=2000;invoice_date :grp;%m lim 10;;
+
+// Customers whose name includes Diaz, phone begins 212-, and created on or after 2024-01-01
+customers name ~"Diaz";phone ~"212-";created >=2024-01-01;_;;
+
+// Active products over 50 in price with name containing Cable
+products active 1;unit_price >50;name ~"Cable";_;;
+
+// Open invoices due on or before 2025-09-30 with subtotal at least 250
+invoices status open;due_date <=2025-09-30;subtotal >=250;_;;
+
+// Invoice items mentioning Adapter where quantity is 2 or more and unit price is 20 or less
+invoice_items description ~"Adapter";quantity >=2;unit_price <=20;_;;
+
+// Maximum invoice total per customer, highest first, include the customer name
+invoices total :max:dsc;customer_id :grp;customers id @;name _;;
+
+// Paid invoices summed by customer, sort totals high to low, attach customer name
+invoices status paid;total :sum:dsc;customer_id :grp;customers id @;name _;;
+
+// On 2024-12-01, invoice counts by status, sorted descending
+invoices invoice_date 2024-12-01;id :cnt:dsc;status :grp;;
+
+// Average invoice total by due date for invoices issued after 2024-01-01, newest due dates first
+invoices invoice_date >2024-01-01;total :avg;due_date :grp:dsc;;
+
+// Products created on 2023-09-15 grouped by active flag with counts ascending
+products created 2023-09-15;id :cnt:asc;active :grp;;
+
+// Total line amount per product, sort high to low, include product name
+invoice_items line_total :sum:dsc;product_id :grp;products id @;name _;;
+
+// Items priced at least 10: average quantity per product ascending with product name
+invoice_items unit_price >=10;quantity :avg:asc;product_id :grp;products id @;name _;;
+
+// Days with at least 3 customer signups, dates ascending
+customers id :cnt>=3;created :grp:asc;;
+
+// Overdue invoices with issue date after 2024-10-01: totals by due date, largest first
+invoices status overdue;invoice_date >2024-10-01;total :sum:dsc;due_date :grp;;
+
+// For items with HDMI in the description, maximum line total per invoice
+invoice_items description ~"HDMI";line_total :max;invoice_id :grp;;
+
+// Invoice totals by status for invoices on 2025-01-01, smallest totals first
+invoices invoice_date 2025-01-01;total :sum:asc;status :grp;;
+
+// Products added on or before 2024-03-31: average price by active flag, sorted high to low
+products created <=2024-03-31;unit_price :avg:dsc;active :grp;;
+
+// Products with price at least 100 grouped by active status, counts descending
+products unit_price >=100;id :cnt:dsc;active :grp;;
+
+// Invoices for customer 220 issued on or after 2024-01-01: sum totals by status, ascending
+invoices customer_id 220;invoice_date >=2024-01-01;total :sum:asc;status :grp;;
+
+// Customers created on 2023-12-15 whose name contains Lee (all fields)
+customers created 2023-12-15;name ~"Lee";_;;
+
+// Items on invoice 6001 with line total at least 100 and quantity at most 3 (all fields)
+invoice_items invoice_id 6001;line_total >=100;quantity <=3;_;;
+
+// Invoices due 2025-11-15 with tax over 50 and status paid (all columns)
+invoices due_date 2025-11-15;tax >50;status paid;_;;
+
+// After 2025-01-01, average invoice total per customer, highest averages first, include customer name
+invoices invoice_date >2025-01-01;total :avg:dsc;customer_id :grp;customers id @;name _;;
+
+// Items with USB in description: maximum quantity per product descending, include product name
+invoice_items description ~"USB";quantity :max:dsc;product_id :grp;products id @;name _;;
+
+// Invoices with total at least 1000: counts by customer low to high, attach customer name
+invoices total >=1000;id :cnt:asc;customer_id :grp;customers id @;name _;;
+
+// Customers with 212- area code and name including Lee, created on or before 2024-12-31
+customers phone ~"212-";name ~"Lee";created <=2024-12-31;_;;
+
+// Customer 250 with email info@eastside.io added after 2023-10-10
+customers id 250;email "info@eastside.io";created >2023-10-10;_;;
+
+// Active products costing at least 100 that mention Adapter in the name
+products active 1;unit_price >=100;name ~"Adapter";_;;
+
+// Products made before 2024-07-01 whose SKU contains USB and price at most 5
+products created <2024-07-01;sku ~"USB";unit_price <=5;_;;
+
+// Overdue invoices due before 2025-10-01 with totals of 1000 or more
+invoices status overdue;due_date <2025-10-01;total >=1000;_;;
+
+// Invoices dated 2025-09-15 for customer 220 with zero tax
+invoices invoice_date 2025-09-15;customer_id 220;tax 0;_;;
+
+// Line items with quantity 5+ that include HDMI and line total at least 100
+invoice_items quantity >=5;description ~"HDMI";line_total >=100;_;;
+
+// Items on invoice 6001 priced exactly 19.99 with quantity no more than 10
+invoice_items invoice_id 6001;unit_price 19.99;quantity <=10;_;;
+
+// Invoice counts by customer id, sort customer id descending
+invoices id :cnt;customer_id :grp:dsc;;
+
+// Signup dates with at least 3 customers
+customers id :cnt>=3;created :grp;;
+
+// Product creation days where summed unit price is 200 or less
+products unit_price :sum<=200;created :grp;;
+
+// Statuses with four or fewer invoices
+invoices id :cnt<=4;status :grp;;
+
+// Customers whose combined invoice totals reach 2500 or more
+invoices total :sum>=2500;customer_id :grp;;
+
+// Average item quantity per product, highest to lowest
+invoice_items quantity :avg:dsc;product_id :grp;;
+
+// Maximum line total for each invoice, sorted low to high
+invoice_items line_total :max:asc;invoice_id :grp;;
+
+// Lowest average invoice total by status
+invoices total :avg:asc;status :grp;;
+
+// Sum of invoice totals per due date, newest due dates first
+invoices total :sum;due_date :grp:dsc;;
+
+// Invoice quantities summed per invoice id, invoice id ascending
+invoice_items quantity :sum;invoice_id :grp:asc;;
+
+// Top customers by total invoiced amount, include customer name
+invoices total :sum:dsc;customer_id :grp;customers id @;name _;;
+
+// Average invoice total per customer, smallest averages first with customer name
+invoices total :avg:asc;customer_id :grp;customers id @;name _;;
+
+// Products mentioning Cable priced under 25 and created after 2023-01-01
+products name ~"Cable";unit_price <25;created >2023-01-01;_;;
+
+// Invoices issued on or before 2023-06-30 with subtotal below 100 and status open
+invoices invoice_date <=2023-06-30;subtotal <100;status open;_;;
+
+// Items for product 9999 with line totals at least 100 and description including Adapter
+invoice_items product_id 9999;line_total >=100;description ~"Adapter";_;;
+
+// Products added per day, highest average price first
+products unit_price :avg:dsc;created :grp;;
+
+// Total tax by status, largest first
+invoices tax :sum:dsc;status :grp;;
+
