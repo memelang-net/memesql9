@@ -2,11 +2,11 @@
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
 MEMELANG USES AXES ORDERED HIGH TO LOW
-ONE OR MORE WHITESPACES ***ALWAYS*** MEANS "NEW AXIS"
+ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.39
+MEMELANG_VER = 9.40
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
@@ -76,7 +76,7 @@ roles actor :$a~"Bruce Willis","Uma Thurman";movie _;@ @ @;actor !$a;;
 movies year <1980;description <=>"war">=$sim;title :grp;roles movie @;rating :min:dsc;%m lim 12;;
 
 // Roles for movies Hero or House of Flying Daggers where actor name includes Li, actor A-Z
-movies title "Hero","House of Flying Daggers";title _;roles movie @;actor :asc~"Li";;
+movies title "Hero","House of Flying Daggers";roles movie @;actor :asc~"Li";;
 '''
 
 import random, re, json, sys
@@ -134,7 +134,7 @@ MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN
 IGNORE_KINDS = {'COMMENT','MTBL'}
 DELIDE = {'SAME':SAME,'MSAME':MSAME,'WILD': WILD,'EQL': '='}
 
-D, Q, M = MODE+'d', MODE+'q', MODE+'m'
+D, Q, M = MODE+'tab', MODE+'q', MODE+'m'
 VOCAB = {
 	D: { # DDL
 		'CMP': {'EQL','NOT','GT','GE','LT','LE'},
@@ -154,16 +154,6 @@ VOCAB = {
 		'DAT': {'ALNUM','INT'}
 	}
 }
-
-EBNF = '''
-TERM ::= DAT [MOD DAT]
-LEFT ::= [MOD DAT] {SF VAR|ALNUM}
-RIGHT ::= TERM {OR TERM}
-AXIS ::= LEFT [CMP RIGHT]
-VEC ::= [MODE] AXIS {SA AXIS}
-MAT ::= VEC {SV VEC}
-MEME ::= MAT {SM MAT}
-'''
 
 class Token():
 	kind: str
@@ -616,6 +606,7 @@ class MemePGSQL(Meme):
 				funcs = set(t.lex for t in vec[VAL][L][R:])
 				if grouping and not bool(funcs & (set(SQL.tally) | {'grp'})): 
 					vec[VAL][L].append(Token('ALNUM', 'last'))
+					if vec[VAL].opr.lex == ELIDE: vec[VAL].opr = Token('EQL','=')
 
 				select = SQL.select(vec[VAL], bind) # f"{tab_alias}_{curr[COL].param}"
 				selects.append(select)
