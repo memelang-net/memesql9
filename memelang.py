@@ -6,7 +6,7 @@ ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.40
+MEMELANG_VER = 9.41
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
@@ -134,13 +134,31 @@ MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN
 IGNORE_KINDS = {'COMMENT','MTBL'}
 DELIDE = {'SAME':SAME,'MSAME':MSAME,'WILD': WILD,'EQL': '='}
 
-D, Q, M = MODE+'tab', MODE+'q', MODE+'m'
+Q, M = MODE+'q', MODE+'m'
 VOCAB = {
-	D: { # DDL
+	MODE+'tab': { # Table
 		'CMP': {'EQL','NOT','GT','GE','LT','LE'},
 		'MOD': {},
 		'DAT': {'ALNUM','QUOT','INT','DEC','SAME','MSAME','WILD'},
 		'FUNC': {'TYP','ROL','DESC'}
+	},
+	MODE+'for': { # Foreign
+		'CMP': {'EQL'},
+		'MOD': {},
+		'DAT': {'ALNUM','QUOT','SAME','MSAME','WILD'},
+		'FUNC': {}
+	},
+	MODE+'uni': { # Unique
+		'CMP': {'EQL'},
+		'MOD': {},
+		'DAT': {'ALNUM','QUOT'},
+		'FUNC': {}
+	},
+	MODE+'pri': { # Pri
+		'CMP': {'EQL'},
+		'MOD': {},
+		'DAT': {'ALNUM','QUOT'},
+		'FUNC': {}
 	},
 	Q: { # DQL
 		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR','DSML'},
@@ -296,7 +314,6 @@ class Matrix(Node):
 			elif diff<0: raise Err('E_FIRST_VECTOR_ALWAYS_LONGEST')
 
 
-
 def lex(src: Memelang) -> Iterator[Token]:
 	for m in MASTER_PATTERN.finditer(src):
 		kind = m.lastgroup
@@ -309,6 +326,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 	tokens = Stream(lex(src))
 	bind: List[str] = []
 	mat, vec = Matrix(), Vector()
+	line = 1
 	
 	while tokens.peek():
 
@@ -379,7 +397,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			tokens.next()
 			continue
 
-		raise Err(f'E_TOK {tokens.next()}')
+		raise Err(f'E_PARSE {tokens.next()}\n{vec}')
 
 	if vec: 
 		vec.mode=mode
