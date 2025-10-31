@@ -6,9 +6,9 @@ ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.41
+MEMELANG_VER = 9.42
 
-syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
+syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"des")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
 examples = '''
 %tab roles id :TYP=INT;>0;rating :DESC="Decimal 0-5 star rating of performance";:TYP=DEC;>0;<=5;actor :DESC="Actor's full name";:TYP=STR;movie :DESC="Movie's full name";:TYP=STR;character :DESC="Character's full name";:TYP=STR;;
@@ -54,8 +54,8 @@ actors name ~"Ana";age >=20;<=35;_;;
 // Roles rated below 1.5 for movies before 1980
 movies year <1980;title _;roles movie @;rating <1.5;_;;
 
-// roles sort rating dsc, movie dsc
-roles rating :dsc;movie :dsc;;
+// roles sort rating des, movie des
+roles rating :des;movie :des;;
 
 // All movies before 1970 ordered by year asc
 movies year :asc<1970;_;;
@@ -73,7 +73,7 @@ movies description <=>"robot">=$sim;title _;roles movie @;rating >=3;;
 roles actor :$a~"Bruce Willis","Uma Thurman";movie _;@ @ @;actor !$a;;
 
 // War stories before 1980: top 12 movies by minimum role rating
-movies year <1980;description <=>"war">=$sim;title :grp;roles movie @;rating :min:dsc;%m lim 12;;
+movies year <1980;description <=>"war">=$sim;title :grp;roles movie @;rating :min:des;%m lim 12;;
 
 // Roles for movies Hero or House of Flying Daggers where actor name includes Li, actor A-Z
 movies title "Hero","House of Flying Daggers";roles movie @;actor :asc~"Li";;
@@ -164,7 +164,7 @@ VOCAB = {
 		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR','DSML'},
 		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
 		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','WILD','EMB','YMD','YMDHMS'},
-		'FUNC': {"grp","asc","dsc","sum","avg","min","max","cnt","last"}
+		'FUNC': {"grp","asc","des","sum","avg","min","max","cnt","last"}
 	},
 	M: { # META
 		'CMP': {'EQL'},
@@ -632,7 +632,7 @@ class MemePGSQL(Meme):
 				# AGG/SORT
 				if 'grp' in funcs: groups.append(select)
 				if 'asc' in funcs: ords.append(SQL(select.lex+' ASC', select.params, ANONE))
-				elif 'dsc' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
+				elif 'des' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
 
 				# BIND VARS			
 				for axis in axes:

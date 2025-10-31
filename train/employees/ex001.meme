@@ -269,7 +269,7 @@ performance_reviews rating 3.0,5.0;_;;
 performance_reviews comments ~"leadership";_;;
 
 // review notes by similarity to teamwork
-performance_reviews comments <=>"teamwork":dsc;_;;
+performance_reviews comments <=>"teamwork":des;_;;
 
 // reviews created on 2025-07-07
 performance_reviews created 2025-07-07;_;;
@@ -278,7 +278,7 @@ performance_reviews created 2025-07-07;_;;
 performance_reviews comments <=>"teamwork">=0.9;_;;
 
 // performance reviews relating to communication skills (sim>0.75) order by sim
-performance_reviews comments <=>"communication skills":dsc>0.75;_;;
+performance_reviews comments <=>"communication skills":des>0.75;_;;
 
 // time-off request id 444
 time_off_requests id 444;_;;

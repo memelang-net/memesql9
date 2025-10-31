@@ -26,7 +26,7 @@ Create the following examples for the schema. Output in markdown box as `// user
 Now create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
 * for each table, for each column, 3 examples that sort asc on just that column
 * for each table, for each column, 3 examples that sort asc on just that column
-* for each table, 6 examples that sort on 2-3 columns, mixing :asc and :dsc
+* for each table, 6 examples that sort on 2-3 columns, mixing :asc and :des
 * for each table, for each int/date/dec column, 2 examples filter that column twice as col >=X;<=Y
 * for each table, 4 examples that filter on 2-4 columns
 * for each table, 2 examples that filter on 2-4 columns and sort on one column
@@ -48,12 +48,12 @@ Now create the following examples for the schema. Output in markdown box as `// 
 * 10 examples using :cnt|sum|min|max|avg and :grp and a filter column
 * 10 examples using group-filter :grp[<|>|=|!=|~|!~|<=>]X with a :cnt|sum|min|max|avg
 * 10 examples using group :grp and a filter on :cnt|sum|min|max|avg<>=X
-* 10 examples using group-filter-sort :grp:asc|dsc[<|>|=|!=|~|!~|<=>]X with a :cnt|sum|min|max|avg
-* 10 examples using group :grp and a filter-sort on :cnt|sum|min|max|avg:asc|dsc<>=X
+* 10 examples using group-filter-sort :grp:asc|des[<|>|=|!=|~|!~|<=>]X with a :cnt|sum|min|max|avg
+* 10 examples using group :grp and a filter-sort on :cnt|sum|min|max|avg:asc|des<>=X
 * 10 join examples using @, projecting two column value not available in one table
 
 
 Now create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
 * 20 multi-hop join examples
-* 20 examples that include :cnt|sum|min|max|avg and :grp and :asc|dsc and a filter and an @ join
+* 20 examples that include :cnt|sum|min|max|avg and :grp and :asc|des and a filter and an @ join
 * 20 examples that assign a variable :$x[!=|~|!~|>|<|>=|<=] to an unknown value, then join _ to @, then reference the variable as col $x or col !$x.

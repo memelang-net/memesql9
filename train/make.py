@@ -5,8 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from openai import OpenAI
 from memelang import MemePGSQL
 
-iterations = 6
-experit = 25
+iterations = 3
+experit = 10
 exfiles = 3
 
 def chat(model, content):
@@ -30,10 +30,7 @@ if __name__ == "__main__":
 	errcheck = open('./prompt_check.md',encoding="utf-8").read()
 	schema = open(f'./{group}/_schema.meme',encoding="utf-8").read()
 	paths = [p for p in Path(f'./{group}').glob('ex*.meme') if p.is_file()]
-	count = min(exfiles, len(paths))
-	if not count: raise ValueError('no examples')
-	chosen = random.sample(paths, count)
-	examples = ''.join(p.read_text(encoding='utf-8') for p in chosen)
+	examples = ''.join(p.read_text(encoding='utf-8') for p in paths[-4:])
 
 	# OpenAI
 	model_generate = 'gpt-5'
@@ -42,7 +39,7 @@ if __name__ == "__main__":
 	client = OpenAI(api_key=OPENAI_API_KEY)
 
 	prompt_generate = f'''
-	Generate {experit} distinct LLM training examples demonstrating 3+ syntax elements for the following DSL. Output only JSON as `[{{"input":"natural language query","output":"MEMELANG query"}}]`.
+	Generate {experit} distinct LLM training examples demonstrating `@ @ @` self-join combined with other syntax elements for the following DSL. Use varied tables. Output only JSON as `[{{"input":"natural language query","output":"MEMELANG query"}}]`.
 	* Use distinct phrasing and patterning for each input in the form a user's search query. Omit phrases like "Give me" or "Return".
 	* NEVER use "capture" "remember" "bind" or any program instructions in input
 	* Use only ASCII characters

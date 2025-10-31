@@ -30,7 +30,7 @@ if __name__ == "__main__":
 							]
 						}, ensure_ascii=False) + "\n")
 
-						if random.randint(1, 10) == 1:
+						if random.randint(1, 10)>0:
 							w.write(json.dumps({
 								"messages": [
 									{"role": "system", "content": sql2meme_system_prompt},

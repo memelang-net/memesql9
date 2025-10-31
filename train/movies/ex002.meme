@@ -193,7 +193,7 @@ movies genre scifi;title ~"star";year >=1970;_;;
 // Roles where actor name includes Lee and rating at least 2.5 but not 5
 roles actor ~"Lee";rating >=2.5;!=5;_;;
 
-// Exclude actor ids 17 and 213; ages 30 to 60
+// Exclude actor ids 17 and 213;ages 30 to 60
 actors id !=17,213;age >=30;<=60;_;;
 
 // Sci-fi robot movies since 1990

@@ -116,16 +116,16 @@ payroll_entries created 2025-06-20;_;;
 employees last_name :asc;_;;
 
 // employees by salary high to low
-employees salary :dsc;_;;
+employees salary :des;_;;
 
 // employees by hire date newest first
-employees hire_date :dsc;_;;
+employees hire_date :des;_;;
 
 // departments by name ascending
 departments name :asc;_;;
 
 // jobs by title descending
-jobs title :dsc;_;;
+jobs title :des;_;;
 
 // locations by country A-Z
 locations country :asc;_;;
@@ -137,13 +137,13 @@ benefit_plans type :asc;_;;
 employee_benefits start_date :asc;_;;
 
 // performance reviews by rating desc
-performance_reviews rating :dsc;_;;
+performance_reviews rating :des;_;;
 
 // time off by start_date ascending
 time_off_requests start_date :asc;_;;
 
 // timesheets by week_start descending
-timesheets week_start :dsc;_;;
+timesheets week_start :des;_;;
 
 // skills by name A-Z
 skills name :asc;_;;
@@ -152,16 +152,16 @@ skills name :asc;_;;
 employee_skills level :asc;_;;
 
 // payroll runs by pay_date newest first
-payroll_runs pay_date :dsc;_;;
+payroll_runs pay_date :des;_;;
 
 // payroll entries by net_pay descending
-payroll_entries net_pay :dsc;_;;
+payroll_entries net_pay :des;_;;
 
 // employees sort last name asc then salary desc
-employees last_name :asc;salary :dsc;_;;
+employees last_name :asc;salary :des;_;;
 
 // employees by status asc then hire_date desc
-employees status :asc;hire_date :dsc;_;;
+employees status :asc;hire_date :des;_;;
 
 // departments by name asc then id asc
 departments name :asc;id :asc;_;;
@@ -173,7 +173,7 @@ jobs grade :asc;title :asc;_;;
 locations country :asc;region :asc;_;;
 
 // payroll entries by payroll_run_id asc then gross_pay desc
-payroll_entries payroll_run_id :asc;gross_pay :dsc;_;;
+payroll_entries payroll_run_id :asc;gross_pay :des;_;;
 
 // employees hired 2023-01-01..2023-12-31
 employees hire_date >=2023-01-01;<=2023-12-31;_;;
@@ -260,13 +260,13 @@ payroll_runs status paid;pay_date >=2025-06-01;<=2025-06-30;_;;
 payroll_entries currency "USD";net_pay >=2500;_;;
 
 // employees named like Sam, sort by hire_date desc
-employees first_name ~"Sam";hire_date :dsc;_;;
+employees first_name ~"Sam";hire_date :des;_;;
 
 // departments at location 3, name A-Z
 departments location_id 3;name :asc;_;;
 
 // jobs exempt 1, sort by max_salary desc
-jobs exempt 1;max_salary :dsc;_;;
+jobs exempt 1;max_salary :des;_;;
 
 // locations in country US, region A-Z
 locations country "US";region :asc;_;;
@@ -275,7 +275,7 @@ locations country "US";region :asc;_;;
 benefit_plans active 1;type :asc;_;;
 
 // payroll entries for employee 700, net_pay desc
-payroll_entries employee_id 700;net_pay :dsc;_;;
+payroll_entries employee_id 700;net_pay :des;_;;
 
 // First 10 employees
 employees _ _;%m lim 10;;

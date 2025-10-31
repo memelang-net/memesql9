@@ -2,7 +2,7 @@
 employees status on_leave;_;%m lim 10;beg 50;;
 
 // employees active, salary >= 120000, order by salary desc limit 10
-employees status active;salary :dsc>=120000;_;%m lim 10;;
+employees status active;salary :des>=120000;_;%m lim 10;;
 
 // departments created after 2023-01-01, name A-Z top 8
 departments created >2023-01-01;name :asc;_;%m lim 8;;
@@ -11,7 +11,7 @@ departments created >2023-01-01;name :asc;_;%m lim 8;;
 jobs grade "P4";min_salary >=90000;title :asc;_;%m lim 12;;
 
 // performance reviews rating >= 4.5, newest first, cap 15
-performance_reviews rating >=4.5;review_date :dsc;_;%m lim 15;;
+performance_reviews rating >=4.5;review_date :des;_;%m lim 15;;
 
 // employees on_leave hired in 2024, sort hire_date asc page 2 of 20
 employees status on_leave;hire_date :asc>=2024-01-01;<=2024-12-31;_;%m lim 20;beg 20;;
@@ -20,7 +20,7 @@ employees status on_leave;hire_date :asc>=2024-01-01;<=2024-12-31;_;%m lim 20;be
 time_off_requests status approved;start_date :asc>=2025-09-01;<=2025-09-30;_;%m lim 25;beg 25;;
 
 // payroll entries USD with gross_pay >= 2000, sort net_pay desc page 3 of 10
-payroll_entries currency "USD";gross_pay >=2000;net_pay :dsc;_;%m lim 10;beg 20;;
+payroll_entries currency "USD";gross_pay >=2000;net_pay :des;_;%m lim 10;beg 20;;
 
 // skills category Data, name A-Z limit 30 offset 60
 skills category "Data";name :asc;_;%m lim 30;beg 60;;
@@ -35,7 +35,7 @@ locations country :grp:asc;;
 benefit_plans type :grp;;
 
 // distinct time-off types Z-A
-time_off_requests type :grp:dsc;;
+time_off_requests type :grp:des;;
 
 // distinct timesheet approver_id
 timesheets approver_id :grp;;
@@ -254,13 +254,13 @@ employee_benefits coverage_level :grp=family;id :cnt;;
 benefit_plans type :grp~"dental";id :cnt;;
 
 // departments grouped, avg salary desc where avg >= 90000
-employees salary :avg:dsc>=90000;department_id :grp;;
+employees salary :avg:des>=90000;department_id :grp;;
 
 // employees grouped by reviewer, review count desc where count >= 5
-performance_reviews id :cnt:dsc>=5;reviewer_id :grp;;
+performance_reviews id :cnt:des>=5;reviewer_id :grp;;
 
 // payroll_run grouped, sum net_pay desc where sum >= 50000
-payroll_entries net_pay :sum:dsc>=50000;payroll_run_id :grp;;
+payroll_entries net_pay :sum:des>=50000;payroll_run_id :grp;;
 
 // employees grouped by approver, timesheet count asc where count >= 2
 timesheets id :cnt:asc>=2;approver_id :grp;;
@@ -269,16 +269,16 @@ timesheets id :cnt:asc>=2;approver_id :grp;;
 employees salary :avg:asc>=70000;job_id :grp;;
 
 // employees grouped by manager_id, count desc where count >= 3
-employees id :cnt:dsc>=3;manager_id :grp;;
+employees id :cnt:des>=3;manager_id :grp;;
 
 // grades grouped, max max_salary desc where max >= 180000
-jobs max_salary :max:dsc>=180000;grade :grp;;
+jobs max_salary :max:des>=180000;grade :grp;;
 
 // time-off grouped by type, hours sum desc where sum >= 24
-time_off_requests hours :sum:dsc>=24;type :grp;;
+time_off_requests hours :sum:des>=24;type :grp;;
 
 // skills grouped by category, count desc where count >= 5
-skills id :cnt:dsc>=5;category :grp;;
+skills id :cnt:des>=5;category :grp;;
 
 // departments grouped, salary sum asc where sum >= 200000
 employees salary :sum:asc>=200000;department_id :grp;;
@@ -290,7 +290,7 @@ employees hire_date 2024-07-15;department_id _;departments id @;name _;location_
 employees department_id 10;job_id _;jobs id @;title _;grade _;;
 
 // department name and location region for employees in payroll run 2002
-payroll_runs id 2002;id _;payroll_entries payroll_run_id @;employee_id _;employees id @;department_id _;departments id @;name _;location_id _;locations id @;region _;;
+payroll_runs id 2002;payroll_entries payroll_run_id @;employee_id _;employees id @;department_id _;departments id @;name _;location_id _;locations id @;region _;;
 
 // reviewer first and last names for reviews on 2025-06-01
 performance_reviews review_date 2025-06-01;reviewer_id _;employees id @;first_name _;last_name _;;

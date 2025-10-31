@@ -38,28 +38,28 @@ movies title :asc;_;;
 actors name :asc;_;;
 
 // Actors Z-A
-actors name :dsc;_;;
+actors name :des;_;;
 
 // sort actor names asc
 actors name :asc;_;;
 
 // order actors by name reverse
-actors name :dsc;_;;
+actors name :des;_;;
 
 // movie titles A to Z
 movies title :asc;_;;
 
 // movies title z to a
-movies title :dsc;_;;
+movies title :des;_;;
 
 // films by title asc
 movies title :asc;_;;
 
 // film titles reverse alpha
-movies title :dsc;_;;
+movies title :des;_;;
 
 // roles by rating high to low
-roles rating :dsc;_;;
+roles rating :des;_;;
 
 // roles rating low to high
 roles rating :asc;_;;
@@ -68,28 +68,28 @@ roles rating :asc;_;;
 roles actor :asc;_;;
 
 // roles actor z-a
-roles actor :dsc;_;;
+roles actor :des;_;;
 
 // order roles by movie name ascending
 roles movie :asc;_;;
 
 // roles movie title desc
-roles movie :dsc;_;;
+roles movie :des;_;;
 
 // arrange actors alphabetically
 actors name :asc;_;;
 
 // reverse alphabet actors
-actors name :dsc;_;;
+actors name :des;_;;
 
 // alphabetize films
 movies title :asc;_;;
 
 // reverse-alphabetize films
-movies title :dsc;_;;
+movies title :des;_;;
 
 // rank roles by rating desc
-roles rating :dsc;_;;
+roles rating :des;_;;
 
 // Rank roles by rating ascending
 roles rating :asc;_;;
@@ -98,16 +98,16 @@ roles rating :asc;_;;
 actors name :asc;_;;
 
 // actors sorted name down
-actors name :dsc;_;;
+actors name :des;_;;
 
 // Films sort title up
 movies title :asc;_;;
 
 // movies sort title down
-movies title :dsc;_;;
+movies title :des;_;;
 
 // role ratings top first
-roles rating :dsc;_;;
+roles rating :des;_;;
 
 // role ratings bottom first
 roles rating :asc;_;;
@@ -116,10 +116,10 @@ roles rating :asc;_;;
 roles actor :asc;_;;
 
 // roles order by actor name Z->A
-roles actor :dsc;_;;
+roles actor :des;_;;
 
 // Sort roles by movie Z to A
-roles movie :dsc;_;;
+roles movie :des;_;;
 
 // sort roles by movie A to Z
 roles movie :asc;_;;
@@ -128,154 +128,154 @@ roles movie :asc;_;;
 movies year :asc;_;;
 
 // Films year newest first
-movies year :dsc;_;;
+movies year :des;_;;
 
 // order movies by release year up
 movies year :asc;_;;
 
 // sort films by year down
-movies year :dsc;_;;
+movies year :des;_;;
 
 // movie list oldest to newest
 movies year :asc;_;;
 
 // movie list newest to oldest
-movies year :dsc;_;;
+movies year :des;_;;
 
 // films ordered by year A->Z (year)
 movies year :asc;_;;
 
 // films ordered by year Z->A
-movies year :dsc;_;;
+movies year :des;_;;
 
 // Rank movies by year ascending
 movies year :asc;_;;
 
 // rank movies by year descending
-movies year :dsc;_;;
+movies year :des;_;;
 
 // films sorted by year descending then title ascending
-movies year :dsc;title :asc;_;;
+movies year :des;title :asc;_;;
 
 // sort by title asc, rating desc
-roles movie :asc;rating :dsc;;
+roles movie :asc;rating :des;;
 
 // roles: title up, rating down
-roles movie :asc;rating :dsc;;
+roles movie :asc;rating :des;;
 
 // roles title asc then rating desc
-roles movie :asc;rating :dsc;;
+roles movie :asc;rating :des;;
 
 // order roles by movie A-Z then rating high->low
-roles movie :asc;rating :dsc;;
+roles movie :asc;rating :des;;
 
-// roles sorted movie asc, rating dsc
-roles movie :asc;rating :dsc;;
+// roles sorted movie asc, rating des
+roles movie :asc;rating :des;;
 
 // movie Z-A then rating low-high (roles)
-roles movie :dsc;rating :asc;;
+roles movie :des;rating :asc;;
 
 // roles by movie desc then rating asc
-roles movie :dsc;rating :asc;;
+roles movie :des;rating :asc;;
 
 // roles movie down, rating up
-roles movie :dsc;rating :asc;;
+roles movie :des;rating :asc;;
 
-// rating dsc after movie asc
-roles movie :asc;rating :dsc;;
+// rating des after movie asc
+roles movie :asc;rating :des;;
 
 // rating asc after movie desc
-roles movie :dsc;rating :asc;;
+roles movie :des;rating :asc;;
 
-// actor asc, rating dsc (roles)
-roles actor :asc;rating :dsc;;
+// actor asc, rating des (roles)
+roles actor :asc;rating :des;;
 
 // roles: actor A-Z then rating high first
-roles actor :asc;rating :dsc;;
+roles actor :asc;rating :des;;
 
 // roles actor up rating down
-roles actor :asc;rating :dsc;;
+roles actor :asc;rating :des;;
 
 // roles actor Z-A then rating low first
-roles actor :dsc;rating :asc;;
+roles actor :des;rating :asc;;
 
 // actor desc, rating asc
-roles actor :dsc;rating :asc;;
+roles actor :des;rating :asc;;
 
-// rating dsc after actor asc
-roles actor :asc;rating :dsc;;
+// rating des after actor asc
+roles actor :asc;rating :des;;
 
 // rating asc after actor desc
-roles actor :dsc;rating :asc;;
+roles actor :des;rating :asc;;
 
 // roles: actor up, rating up
 roles actor :asc;rating :asc;;
 
 // roles: actor down, rating down
-roles actor :dsc;rating :dsc;;
+roles actor :des;rating :des;;
 
 // actor asc then movie desc
-roles actor :asc;movie :dsc;;
+roles actor :asc;movie :des;;
 
 // actor Z-A then movie A-Z
-roles actor :dsc;movie :asc;;
+roles actor :des;movie :asc;;
 
 // movie asc then actor desc
-roles movie :asc;actor :dsc;;
+roles movie :asc;actor :des;;
 
 // movie desc then actor asc
-roles movie :dsc;actor :asc;;
+roles movie :des;actor :asc;;
 
 // roles by movie A-Z actor A-Z
 roles movie :asc;actor :asc;;
 
 // roles by movie Z-A actor Z-A
-roles movie :dsc;actor :dsc;;
+roles movie :des;actor :des;;
 
 // films: title asc, year desc
-movies title :asc;year :dsc;;
+movies title :asc;year :des;;
 
 // movies title up then year down
-movies title :asc;year :dsc;;
+movies title :asc;year :des;;
 
 // movie titles A-Z then newest first
-movies title :asc;year :dsc;;
+movies title :asc;year :des;;
 
 // titles Z-A then year ascending
-movies title :dsc;year :asc;;
+movies title :des;year :asc;;
 
 // movies by year asc, title desc
-movies year :asc;title :dsc;;
+movies year :asc;title :des;;
 
 // movies by year desc, title asc
-movies year :dsc;title :asc;;
+movies year :des;title :asc;;
 
 // order films: year up then title up
 movies year :asc;title :asc;;
 
 // order films: year down then title down
-movies year :dsc;title :dsc;;
+movies year :des;title :des;;
 
 // roles: rating desc then movie asc
-roles rating :dsc;movie :asc;;
+roles rating :des;movie :asc;;
 
 // roles: rating asc then movie desc
-roles rating :asc;movie :dsc;;
+roles rating :asc;movie :des;;
 
 // roles by rating down then actor up
-roles rating :dsc;actor :asc;;
+roles rating :des;actor :asc;;
 
 // roles by rating up then actor down
-roles rating :asc;actor :dsc;;
+roles rating :asc;actor :des;;
 
-// roles sort rating dsc, movie dsc
-roles rating :dsc;movie :dsc;;
+// roles sort rating des, movie des
+roles rating :des;movie :des;;
 
 // roles sort rating asc, actor asc
 roles rating :asc;actor :asc;;
 
-// movies: year dsc then title dsc
-movies year :dsc;title :dsc;;
+// movies: year des then title des
+movies year :des;title :des;;
 
 // movies: title asc then year asc
 movies title :asc;year :asc;;
@@ -284,13 +284,13 @@ movies title :asc;year :asc;;
 movies year :asc<1970;_;;
 
 // movies released after 2005 sorted by year desc
-movies year :dsc>2005;_;;
+movies year :des>2005;_;;
 
 // films released after 2007 sorted desc
-movies year :dsc>2007;_;;
+movies year :des>2007;_;;
 
 // movies released after 2009 descending
-movies year :dsc>2009;_;;
+movies year :des>2009;_;;
 
 // movies before 1970 sorted by year asc
 movies year :asc<1970;_;;

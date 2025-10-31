@@ -1,5 +1,5 @@
 // rank invoice items by line total high to low
-invoice_items line_total :dsc;_;;
+invoice_items line_total :des;_;;
 
 // invoice items alphabetized by description
 invoice_items description :asc;_;;
@@ -8,37 +8,37 @@ invoice_items description :asc;_;;
 invoice_items id :asc;_;;
 
 // customers sorted by name A-Z then created newest first
-customers name :asc;created :dsc;_;;
+customers name :asc;created :des;_;;
 
 // order customers by signup date oldest first, tie-break by id
 customers created :asc;id :asc;_;;
 
 // customers by email alphabetically, then name Z-A
-customers email :asc;name :dsc;_;;
+customers email :asc;name :des;_;;
 
 // rank customers by phone descending and name ascending
-customers phone :dsc;name :asc;_;;
+customers phone :des;name :asc;_;;
 
 // customers by id high to low, break ties with created newest
-customers id :dsc;created :dsc;_;;
+customers id :des;created :des;_;;
 
 // products by price high to low, then name A-Z
-products unit_price :dsc;name :asc;_;;
+products unit_price :des;name :asc;_;;
 
 // alphabetize products by name, sku ascending
 products name :asc;sku :asc;_;;
 
 // products sorted by active status then price low to high
-products active :dsc;unit_price :asc;_;;
+products active :des;unit_price :asc;_;;
 
 // products by created date descending, then id ascending
-products created :dsc;id :asc;_;;
+products created :des;id :asc;_;;
 
 // products ordered by sku Z-A, then name Z-A
-products sku :dsc;name :dsc;_;;
+products sku :des;name :des;_;;
 
 // invoices by issue date newest first, then total high to low
-invoices invoice_date :dsc;total :dsc;_;;
+invoices invoice_date :des;total :des;_;;
 
 // sort invoices by due date earliest first, then status A-Z
 invoices due_date :asc;status :asc;_;;
@@ -50,10 +50,10 @@ invoices customer_id :asc;invoice_no :asc;_;;
 invoices total :asc;tax :asc;_;;
 
 // invoices sorted by created date newest, then id ascending
-invoices created :dsc;id :asc;_;;
+invoices created :des;id :asc;_;;
 
 // invoice items by line total high to low, then quantity low to high
-invoice_items line_total :dsc;quantity :asc;_;;
+invoice_items line_total :des;quantity :asc;_;;
 
 // order invoice items by unit price low to high, then description A-Z
 invoice_items unit_price :asc;description :asc;_;;
@@ -62,7 +62,7 @@ invoice_items unit_price :asc;description :asc;_;;
 invoice_items invoice_id :asc;id :asc;_;;
 
 // invoice items by product id descending, then unit price high to low
-invoice_items product_id :dsc;unit_price :dsc;_;;
+invoice_items product_id :des;unit_price :des;_;;
 
 // items alphabetized by description / line total low to high
 invoice_items description :asc;line_total :asc;_;;
@@ -71,13 +71,13 @@ invoice_items description :asc;line_total :asc;_;;
 customers created :asc>=2024-06-01;_;;
 
 // customers up to 2025-03-31, newest first
-customers created :dsc<=2025-03-31;_;;
+customers created :des<=2025-03-31;_;;
 
 // customers with id 150 and above, low to high
 customers id :asc>=150;_;;
 
 // customers with id at most 900, high to low
-customers id :dsc<=900;_;;
+customers id :des<=900;_;;
 
 // customers with names starting from M, A-Z
 customers name :asc>="M";_;;
@@ -86,19 +86,19 @@ customers name :asc>="M";_;;
 products unit_price :asc>=10;_;;
 
 // products priced up to 250, high to low
-products unit_price :dsc<=250;_;;
+products unit_price :des<=250;_;;
 
 // products added since 2023-01-01, oldest first
 products created :asc>=2023-01-01;_;;
 
 // products created no later than 2024-07-01, newest first
-products created :dsc<=2024-07-01;_;;
+products created :des<=2024-07-01;_;;
 
 // products with id 2000 and above, ascending
 products id :asc>=2000;_;;
 
 // invoices issued up to 2025-09-30, newest first
-invoices invoice_date :dsc<=2025-09-30;_;;
+invoices invoice_date :des<=2025-09-30;_;;
 
 // invoices dated from 2024-01-01 onward, oldest first
 invoices invoice_date :asc>=2024-01-01;_;;
@@ -107,7 +107,7 @@ invoices invoice_date :asc>=2024-01-01;_;;
 invoices total :asc>=200;_;;
 
 // invoices with totals up to 5000, high to low
-invoices total :dsc<=5000;_;;
+invoices total :des<=5000;_;;
 
 // invoices with tax from 10 and up, ascending
 invoices tax :asc>=10;_;;
@@ -116,13 +116,13 @@ invoices tax :asc>=10;_;;
 invoice_items quantity :asc>=2;_;;
 
 // invoice items with quantity up to 25, high to low
-invoice_items quantity :dsc<=25;_;;
+invoice_items quantity :des<=25;_;;
 
 // invoice items priced from 5 and up, ascending
 invoice_items unit_price :asc>=5;_;;
 
 // invoice items with line totals up to 750, high to low
-invoice_items line_total :dsc<=750;_;;
+invoice_items line_total :des<=750;_;;
 
 // invoice items with id 10000 and above, ascending
 invoice_items id :asc>=10000;_;;
@@ -131,19 +131,19 @@ invoice_items id :asc>=10000;_;;
 customers name :asc;_;%m lim 10;;
 
 // First 25 newest customers
-customers created :dsc;_;%m lim 25;;
+customers created :des;_;%m lim 25;;
 
 // customers by id ascending, first 50
 customers id :asc;_;%m lim 50;;
 
 // Top 15 customers by email Z-A
-customers email :dsc;_;%m lim 15;;
+customers email :des;_;%m lim 15;;
 
 // customers by phone high-to-low, first 5
-customers phone :dsc;_;%m lim 5;;
+customers phone :des;_;%m lim 5;;
 
 // Top 20 products by price high-to-low
-products unit_price :dsc;_;%m lim 20;;
+products unit_price :des;_;%m lim 20;;
 
 // First 30 products alphabetized by name
 products name :asc;_;%m lim 30;;
@@ -155,13 +155,13 @@ products created :asc;_;%m lim 12;;
 products sku :asc;_;%m lim 40;;
 
 // products by id descending, first 18
-products id :dsc;_;%m lim 18;;
+products id :des;_;%m lim 18;;
 
 // Top 25 invoices by newest issue date
-invoices invoice_date :dsc;_;%m lim 25;;
+invoices invoice_date :des;_;%m lim 25;;
 
 // First 10 biggest invoices by total
-invoices total :dsc;_;%m lim 10;;
+invoices total :des;_;%m lim 10;;
 
 // invoices with earliest due dates, first 15
 invoices due_date :asc;_;%m lim 15;;
@@ -173,13 +173,13 @@ invoices status :asc;_;%m lim 50;;
 invoices id :asc;_;%m lim 5;;
 
 // Top 100 invoice items by line total high-to-low
-invoice_items line_total :dsc;_;%m lim 100;;
+invoice_items line_total :des;_;%m lim 100;;
 
 // First 60 invoice items by unit price low-to-high
 invoice_items unit_price :asc;_;%m lim 60;;
 
 // invoice items by quantity descending, first 30
-invoice_items quantity :dsc;_;%m lim 30;;
+invoice_items quantity :des;_;%m lim 30;;
 
 // Top 22 invoice items alphabetized by description
 invoice_items description :asc;_;%m lim 22;;
@@ -191,19 +191,19 @@ invoice_items id :asc;_;%m lim 12;;
 customers name :asc;_;%m lim 20;beg 40;;
 
 // newest customers, page 1 size 25
-customers created :dsc;_;%m lim 25;beg 0;;
+customers created :des;_;%m lim 25;beg 0;;
 
 // customers by id descending, limit 50 offset 100
-customers id :dsc;_;%m lim 50;beg 100;;
+customers id :des;_;%m lim 50;beg 100;;
 
 // alphabetize customer emails, page 4 with 15 per page
 customers email :asc;_;%m lim 15;beg 45;;
 
 // customers by phone high-to-low, fetch 5 from offset 10
-customers phone :dsc;_;%m lim 5;beg 10;;
+customers phone :des;_;%m lim 5;beg 10;;
 
 // products by price high-to-low, page 2 of 20
-products unit_price :dsc;_;%m lim 20;beg 20;;
+products unit_price :des;_;%m lim 20;beg 20;;
 
 // alphabetize products by name, limit 30, offset 30
 products name :asc;_;%m lim 30;beg 30;;
@@ -218,10 +218,10 @@ products sku :asc;_;%m lim 40;beg 80;;
 products id :asc;_;%m lim 18;beg 36;;
 
 // invoices newest issue date first, page 1 of 25
-invoices invoice_date :dsc;_;%m lim 25;beg 0;;
+invoices invoice_date :des;_;%m lim 25;beg 0;;
 
 // biggest invoices by total, limit 10, offset 10
-invoices total :dsc;_;%m lim 10;beg 10;;
+invoices total :des;_;%m lim 10;beg 10;;
 
 // earliest due invoices first, page 2 size 15
 invoices due_date :asc;_;%m lim 15;beg 15;;
@@ -233,13 +233,13 @@ invoices status :asc;_;%m lim 50;beg 50;;
 invoices id :asc;_;%m lim 5;beg 15;;
 
 // invoice items by line total high-to-low, page 1 100 per page
-invoice_items line_total :dsc;_;%m lim 100;beg 0;;
+invoice_items line_total :des;_;%m lim 100;beg 0;;
 
 // invoice items by unit price low-to-high, page 2 size 60
 invoice_items unit_price :asc;_;%m lim 60;beg 60;;
 
 // invoice items by quantity descending, limit 30 offset 30
-invoice_items quantity :dsc;_;%m lim 30;beg 30;;
+invoice_items quantity :des;_;%m lim 30;beg 30;;
 
 // invoice items alphabetized by description, page 3 of 22 per page
 invoice_items description :asc;_;%m lim 22;beg 44;;

@@ -1,6 +1,6 @@
 MEMELANG:
 * Syntax
-	* [table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var] [":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"dsc")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"
+	* [table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var] [":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"des")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"
 	* WS (whitespace) ONLY after table or column
 	* Final should end in `;;`
 * Columns
@@ -15,7 +15,7 @@ MEMELANG:
 	* `:sum|min|max|cnt|avg|last` may appear before `:grp`
 	* Do not `:sum` ID or date columns
 * Projection
-	* Each clause's column value is automatically projected, including `:grp`
+	* ***Every*** clause's column value is automatically projected, including `col :grp` and `col ~"x"`
 	* If not already in the query, project the target row name column:
 		* In non `:grp` queries, `;_` or `;_;` or `name _` should appear in the desired table, before any following tables
 		* In `:grp` the name column should be projected as `name _` such as `name _;x_id :grp`
@@ -32,8 +32,8 @@ MEMELANG:
 	* Do all filtering and sorting for a table continuously before joining to another table
 	* Incorrect `tab1 col1 val1;...;tab2 col2 @;...;tab1 col3 val3` should be `tab1 col1 val1;col3 val3;...;tab2 col2 @;...`
 * Embedding operator `<=>"xyz"` 
-	* Only followed by `:dsc` when ordering by similarity
+	* Only followed by `:des` when ordering by similarity
 	* Only followed by `>=MIN` when NOT ordering by similarity, default `>=$sim` is populated by compiler
 	* Query may explicitly specify a numeric `>[=]MIN`
-	* Query may specify both `:dsc` and `>=MIN`
+	* Query may specify both `:des` and `>=MIN`
 * `%m lim X;beg Y` triggers pagination

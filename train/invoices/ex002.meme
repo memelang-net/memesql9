@@ -251,40 +251,40 @@ invoice_items quantity >=2;<=5;description ~"Adapter";_;;
 customers name :asc;_;;
 
 // order customers by name Z-A
-customers name :dsc;_;;
+customers name :des;_;;
 
 // customers by signup date newest first
-customers created :dsc;_;;
+customers created :des;_;;
 
 // customers by signup date oldest first
 customers created :asc;_;;
 
 // rank customers by id high to low
-customers id :dsc;_;;
+customers id :des;_;;
 
 // products sorted by price low to high
 products unit_price :asc;_;;
 
 // products sorted by price high to low
-products unit_price :dsc;_;;
+products unit_price :des;_;;
 
 // alphabetize products by name
 products name :asc;_;;
 
 // products by creation date newest first
-products created :dsc;_;;
+products created :des;_;;
 
 // products ordered by id ascending
 products id :asc;_;;
 
 // invoices sorted by issue date newest first
-invoices invoice_date :dsc;_;;
+invoices invoice_date :des;_;;
 
 // invoices sorted by due date earliest first
 invoices due_date :asc;_;;
 
 // rank invoices by total amount descending
-invoices total :dsc;_;;
+invoices total :des;_;;
 
 // invoices by subtotal ascending
 invoices subtotal :asc;_;;
@@ -293,7 +293,7 @@ invoices subtotal :asc;_;;
 invoices id :asc;_;;
 
 // invoice items sorted by quantity descending
-invoice_items quantity :dsc;_;;
+invoice_items quantity :des;_;;
 
 // invoice items ordered by unit price ascending
 invoice_items unit_price :asc;_;;

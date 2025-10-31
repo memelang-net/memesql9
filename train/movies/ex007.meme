@@ -1,23 +1,23 @@
 // Age exactly 33 grouped for actors, ages high to low
-actors age :grp:dsc=33;id :cnt;;
+actors id :cnt;age :grp:des=33;;
 
 // Actor names with "Alex" grouped A-Z and counted
-actors name :grp:asc~"Alex";id :cnt;;
+actors id :cnt;name :grp:asc~"Alex";;
 
 // distinct movie titles A-Z
 movies title :grp:asc;;
 
 // Film titles distinct desc
-movies title :grp:dsc;;
+movies title :grp:des;;
 
 // roles per actor, most to fewest
-roles id :cnt:dsc;actor :grp;;
+roles id :cnt:des;actor :grp;;
 
 // average role rating by actor, high to low
-roles rating :avg:dsc;actor :grp;;
+roles rating :avg:des;actor :grp;;
 
 // maximum role rating by actor, high to low
-roles rating :max:dsc;actor :grp;;
+roles rating :max:des;actor :grp;;
 
 // minimum role rating by actor, low to high
 roles rating :min:asc;actor :grp;;
@@ -26,13 +26,13 @@ roles rating :min:asc;actor :grp;;
 roles id :cnt:asc;actor :grp;;
 
 // film counts by year, high to low
-movies id :cnt:dsc;year :grp;;
+movies id :cnt:des;year :grp;;
 
 // movie counts by year, low to high
 movies id :cnt:asc;year :grp;;
 
 // actors by age, most common first
-actors id :cnt:dsc;age :grp;;
+actors id :cnt:des;age :grp;;
 
 // actors by age, least common first
 actors id :cnt:asc;age :grp;;
@@ -41,31 +41,31 @@ actors id :cnt:asc;age :grp;;
 roles rating :avg:asc;actor :grp;;
 
 // minimum role rating by actor, high to low
-roles rating :min:dsc;actor :grp;;
+roles rating :min:des;actor :grp;;
 
 // maximum role rating by actor, low to high
 roles rating :max:asc;actor :grp;;
 
 // roles per actor, descending by count
-roles id :cnt:dsc;actor :grp;;
+roles id :cnt:des;actor :grp;;
 
 // roles per actor, ascending by count
 roles id :cnt:asc;actor :grp;;
 
 // yearly film totals, descending
-movies id :cnt:dsc;year :grp;;
+movies id :cnt:des;year :grp;;
 
 // yearly film totals, ascending
 movies id :cnt:asc;year :grp;;
 
 // actor workload by count, high to low
-roles id :cnt:dsc;actor :grp;;
+roles id :cnt:des;actor :grp;;
 
 // actor workload by count, low to high
 roles id :cnt:asc;actor :grp;;
 
 // star averages by rating, descending
-roles rating :avg:dsc;actor :grp;;
+roles rating :avg:des;actor :grp;;
 
 // performer averages by rating, ascending
 roles rating :avg:asc;actor :grp;;
@@ -251,49 +251,49 @@ roles rating :max>4.7;actor :grp;;
 roles rating :avg>=4.3;actor :grp:asc;;
 
 // Actors Z-A, average rating < 2.5
-roles rating :avg<2.5;actor :grp:dsc;;
+roles rating :avg<2.5;actor :grp:des;;
 
 // Actor names ascending, maximum rating  5
 roles rating :max=5;actor :grp:asc;;
 
 // Actor names descending, maximum rating != 5
-roles rating :max;actor :grp:dsc!=5;;
+roles rating :max;actor :grp:des!=5;;
 
 // Actors A-Z having minimum rating >= 3
 roles rating :min>=3;actor :grp:asc;;
 
 // Actors Z-A with minimum rating <= 2
-roles rating :min<=2;actor :grp:dsc;;
+roles rating :min<=2;actor :grp:des;;
 
 // Actors sorted A-Z, total rating > 12
 roles rating :sum>12;actor :grp:asc;;
 
 // Actors sorted Z-A, total rating  3
-roles rating :sum=3;actor :grp:dsc;;
+roles rating :sum=3;actor :grp:des;;
 
 // Actors A-Z whose role count >= 2
 roles id :cnt>=2;actor :grp:asc;;
 
 // Actors Z-A with role count < 5
-roles id :cnt<5;actor :grp:dsc;;
+roles id :cnt<5;actor :grp:des;;
 
 // Movies A-Z, average rating  4.2
 roles rating :avg=4.2;movie :grp:asc;;
 
 // Movies Z-A, average rating != 3.0
-roles rating :avg;movie :grp:dsc!=3.0;;
+roles rating :avg;movie :grp:des!=3.0;;
 
 // Movie titles ascending with max role rating >= 4.8
 roles rating :max>=4.8;movie :grp:asc;;
 
 // Movie titles descending with max role rating < 2.0
-roles rating :max<2.0;movie :grp:dsc;;
+roles rating :max<2.0;movie :grp:des;;
 
 // Movies alphabetically, minimum role rating > 1.0
 roles rating :min>1.0;movie :grp:asc;;
 
 // Movies Z-A having minimum role rating  4
-roles rating :min=4;movie :grp:dsc;;
+roles rating :min=4;movie :grp:des;;
 
 // Titles A-Z where total ratings <= 25
 roles rating :sum<=25;movie :grp:asc;;
