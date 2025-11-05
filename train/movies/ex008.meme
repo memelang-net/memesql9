@@ -13,11 +13,23 @@ roles actor _;movie @;;
 // actor same as movie title
 roles actor _;movie @;;
 
+// character same as movie title
+roles character _;movie @;;
+
+// actor name equals character name
+roles actor _;character @;;
+
 // Roles in movies containing "Inception" in title where actor name equals the movie title
 roles movie ~"Inception";actor @;;
 
-// Moves where the title is the year of release and has an actor with the same name
-movies year _;title @;roles actor @;;
+// Movie title = character's name = actor's name
+roles movie _;character @;actor @;;
+
+// All three values are the same: character name, actor name, movie title
+roles character _;actor @;movie @;;
+
+// actor name = movie title = character name
+roles actor _;movie @;character @;;
 
 // Roles of actors over 60
 actors age >60;name _;roles actor @;_;;
@@ -157,14 +169,20 @@ roles actor :$x~"Keanu Reeves","Charlize Theron";movie _;@ @ @;actor !=$x;;
 // Cast who appeared with Mark Hamill or Carrie Fisher
 roles actor :$x~"Mark Hamill","Carrie Fisher";movie _;@ @ @;actor !=$x;;
 
-// Co-stars of people named 'Mark' and 'Carrie'
-roles actor :$x~"Mark","Carrie";movie _;@ @ @;actor !=$x;;
+// Co-stars of people named 'Mark' and 'Carrie', alphabetical
+roles actor :$x~"Mark","Carrie";movie _;@ @ @;actor :asc!=$x;;
 
-// Higher-rated co-stars of people named 'Mark' and 'Carrie'
-roles actor :$x~"Mark","Carrie";rating :$x;movie _;@ @ @;actor !=$x;rating >$x;;
+// Higher-rated co-stars of people named 'Mark' and 'Carrie', sort by rating
+roles actor :$x~"Mark","Carrie";rating :$y;movie _;@ @ @;actor !=$x;rating :asc>$y;;
 
-// Co-stars with higher ratings of actors named 'Mark' rated over 1
-roles actor :$x~"Mark";rating :$x>1;movie _;@ @ @;actor !=$x;rating >$x;;
+// Co-stars Z-A with higher ratings of actors named 'Mark' rated over 1
+roles actor :$x~"Mark";rating :$y>1;movie _;@ @ @;actor :dsc!=$x;rating >$y;;
+
+// movies with same title, different years chronological, different genres
+movie year :$x;genre :$y;title _;@ @ @;year :asc!=$x;genre !=$y;;
+
+// same genre, different year and title movies, sort by title a-z
+movie year :$x;title :$y;genre _;@ @ @;year !=$x;title :asc!=$y;;
 
 // Role counts for movies with "Star" in the title, highest first
 roles movie :grp~"Star";id :cnt:des;;

@@ -5,8 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from openai import OpenAI
 from memelang import MemePGSQL
 
-iterations = 3
-experit = 10
+iterations = 4
+experit = 30
 exfiles = 3
 
 def chat(model, content):
@@ -38,10 +38,13 @@ if __name__ == "__main__":
 	OPENAI_API_KEY=open('../../../openai.key',encoding="utf-8").read()
 	client = OpenAI(api_key=OPENAI_API_KEY)
 
+	#task = f'demonstrating `@ @ @` self-join combined with other syntax elements'
+	task = f'demonstrating two `@` joins with `:(min|max|sum|cnt|avg)` and `:grp` and `:(asc|des)(<|>|<=|>=)` syntax elements'
+
 	prompt_generate = f'''
-	Generate {experit} distinct LLM training examples demonstrating `@ @ @` self-join combined with other syntax elements for the following DSL. Use varied tables. Output only JSON as `[{{"input":"natural language query","output":"MEMELANG query"}}]`.
+	Generate {experit} distinct LLM training examples for the following DSL, {task}. Use varied tables. Output only JSON as `[{{"input":"natural language query","output":"MEMELANG query"}}]`.
 	* Use distinct phrasing and patterning for each input in the form a user's search query. Omit phrases like "Give me" or "Return".
-	* NEVER use "capture" "remember" "bind" or any program instructions in input
+	* NEVER use "capture" "remember" "bind" or any program instructions in user
 	* Use only ASCII characters
 	* Use only exampled rules - do not invent new rules
 	* Use only exampled syntax - do not invent new syntax
@@ -50,10 +53,10 @@ if __name__ == "__main__":
 
 	{syntax}
 
+	{errcheck}
+
 	DB SCHEMA:
 	{schema}
-
-	{errcheck}
 
 	EXAMPLES (`// nat lang\\nmemelang\\n\\n`):
 	```memelang

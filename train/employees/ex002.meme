@@ -190,6 +190,9 @@ departments created >=2023-01-01;<=2023-12-31;_;;
 // jobs min_salary 40000..90000
 jobs min_salary >=40000;<=90000;_;;
 
+// jobs min_salary 40000..90000, not 57000
+jobs min_salary >=40000;<=90000;!=57000;_;;
+
 // jobs created 2024-01-01..2024-12-31
 jobs created >=2024-01-01;<=2024-12-31;_;;
 
@@ -202,19 +205,19 @@ performance_reviews rating >=3.5;<=5.0;_;;
 // time off hours 8..80
 time_off_requests hours >=8;<=80;_;;
 
-// timesheets hours_worked 35..45
+// timesheets hours_worked 35 to 45
 timesheets hours_worked >=35;<=45;_;;
 
 // employee_skills last_used in 2024
 employee_skills last_used >=2024-01-01;<=2024-12-31;_;;
 
-// payroll entries gross_pay 2000..5000
+// payroll entries gross_pay 2000-5000
 payroll_entries gross_pay >=2000;<=5000;_;;
 
 // active full-time employees hired after 2022-01-01
 employees status active;full_time 1;hire_date >2022-01-01;_;;
 
-// employees in dept 10 with salary >= 90000
+// employees in dept 10 with salary >=90000
 employees department_id 10;salary >=90000;_;;
 
 // employees under manager 5 hired before 2020-01-01

@@ -6,7 +6,7 @@ from memelang import MemePGSQL, syntax
 
 groups = ('employees','invoices','movies','followers')
 
-nat2meme_system_prompt = f"Convert user prompt into MEMELANG query. Output only MEMELANG query.\nMEMELANG Syntax:\n\t{syntax}\n\tWS (whitespace) ONLY after table or column.\nTable schema: "
+nat2meme_system_prompt = f"Convert user prompt into MEMELANG query. Output only MEMELANG query.\nMEMELANG Syntax:\n\t{syntax}\n\tWS (whitespace) ONLY after table or column.\nSchema: "
 sql2meme_system_prompt = "Convert SQL to MEMELANG. Output only MEMELANG query."
 
 if __name__ == "__main__":
