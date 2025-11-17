@@ -6,7 +6,7 @@ ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW AXIS"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.44
+MEMELANG_VER = 9.45
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"des")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
@@ -24,19 +24,19 @@ examples = '''
 // All movies
 movies _ _;;
 
-// all films
+// Every film
 movies _ _;;
 
-// all roles
+// Roles
 roles _ _;;
 
 // Titles and descriptions for movies
 movies title _;description _;;
 
-// actor name and ages
+// Actor name and ages
 actors name _;age _;;
 
-// actors age 41 years or older
+// Actors age 41 years or older
 actors age >=41;_;;
 
 // Role 567 and 9766324436
@@ -54,19 +54,19 @@ actors name ~"Ana";age >=20;<=35;_;;
 // Roles rated below 1.5 for movies before 1980
 movies year <1980;title _;roles movie @;rating <1.5;_;;
 
-// roles sort rating des, movie des
+// Roles sort rating des, movie descending
 roles rating :des;movie :des;;
 
 // All movies before 1970 ordered by year asc
 movies year :asc<1970;_;;
 
-// average performer rating at least 4.2
+// Average performer rating at least 4.2
 roles rating :avg>=4.2;actor :grp;;
 
-// minimum role rating by actor, low to high
+// Minimum role rating by actor, low to high
 roles rating :min:asc;actor :grp;;
 
-// roles in movies mentioning robot rated 3+
+// Roles in movies mentioning robot rated 3+
 movies description <=>"robot">=$sim;title _;roles movie @;rating >=3;;
 
 // Costars seen with Bruce Willis and Uma Thurman

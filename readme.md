@@ -1,0 +1,1 @@
+©2025 HOLTWORK LLC. Patents Pending. This software is free to use for development, testing, and educational purposes. Commercial deployment, redistribution, or production use requires a separate license. Contact info@memelang.net.

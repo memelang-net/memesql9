@@ -176,7 +176,7 @@ roles actor :$x~"Mark","Carrie";movie _;@ @ @;actor :asc!=$x;;
 roles actor :$x~"Mark","Carrie";rating :$y;movie _;@ @ @;actor !=$x;rating :asc>$y;;
 
 // Co-stars Z-A with higher ratings of actors named 'Mark' rated over 1
-roles actor :$x~"Mark";rating :$y>1;movie _;@ @ @;actor :dsc!=$x;rating >$y;;
+roles actor :$x~"Mark";rating :$y>1;movie _;@ @ @;actor :des!=$x;rating >$y;;
 
 // movies with same title, different years chronological, different genres
 movie year :$x;genre :$y;title _;@ @ @;year :asc!=$x;genre !=$y;;
