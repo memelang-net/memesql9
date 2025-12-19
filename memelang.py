@@ -1,12 +1,12 @@
 '''
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
-MEMELANG USES AXES ORDERED HIGH TO LOW
-ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW AXIS"
+AXIS:0 (LIMIT) IS ORDERED HIGH TO LOW
+ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW LIMIT"
 NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
 '''
 
-MEMELANG_VER = 9.45
+MEMELANG_VER = 9.47
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"des")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
@@ -43,7 +43,7 @@ actors age >=41;_;;
 roles id 567,9766324436;_;;
 
 // Films with dystopian society narratives sim>.33
-movies description <=>"dystopian">0.33;_;;
+movies description <=>"dystopian"<0.33;_;;
 
 // Movies titled with Star released in 1977 or 1980
 movies title ~"Star";year 1977,1980;_;;
@@ -67,13 +67,13 @@ roles rating :avg>=4.2;actor :grp;;
 roles rating :min:asc;actor :grp;;
 
 // Roles in movies mentioning robot rated 3+
-movies description <=>"robot">=$sim;title _;roles movie @;rating >=3;;
+movies description <=>"robot"<=$sim;title _;roles movie @;rating >=3;;
 
 // Costars seen with Bruce Willis and Uma Thurman
 roles actor :$a~"Bruce Willis","Uma Thurman";movie _;@ @ @;actor !$a;;
 
 // War stories before 1980: top 12 movies by minimum role rating
-movies year <1980;description <=>"war">=$sim;title :grp;roles movie @;rating :min:des;%m lim 12;;
+movies year <1980;description <=>"war"<=$sim;title :grp;roles movie @;rating :min:des;%m lim 12;;
 
 // Roles for movies Hero or House of Flying Daggers where actor name includes Li, actor A-Z
 movies title "Hero","House of Flying Daggers";roles movie @;actor :asc~"Li";;
@@ -252,14 +252,12 @@ class Node(list):
 		return kinds
 
 
-# DAT [MOD DAT]
 class Term(Node):
 	opr: Token = TOK_SEP_TOK
 
 TERM_ELIDE = Term(Token('WILD',ELIDE))
 
 
-# TERM {OR TERM}
 class Right(Node):
 	opr: Token = TOK_OR
 	def check(self) -> 'Right':
@@ -268,7 +266,6 @@ class Right(Node):
 		return self
 
 
-# TERM {FUNC VAR|ALNUM}
 class Left(Node): 
 	opr: Token = TOK_SF
 	def check(self) -> 'Left':
@@ -278,20 +275,18 @@ class Left(Node):
 		return self
 
 
-# LEFT CMP RIGHT
-class Axis(Node):
+class Limit(Node):
 	opr: Token = TOK_EQL
-	def check(self) -> 'Axis': 
+	def check(self) -> 'Limit': 
 		if len(self)!=2: raise Err('E_NODE_LIST')
-		if not isinstance(self[0], Left): raise Err('E_AXIS_LEFT')
-		if not isinstance(self[1], Right): raise Err('E_AXIS_RIGHT')
+		if not isinstance(self[0], Left): raise Err('E_LIMIT_LEFT')
+		if not isinstance(self[1], Right): raise Err('E_LIMIT_RIGHT')
 		return self
 	@property
 	def single(self) -> Token:
 		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
 
 
-# AXIS {SA AXIS}
 class Vector(Node):
 	opr: Token = TOK_SA
 	mode: str = Q
@@ -301,10 +296,9 @@ class Vector(Node):
 	def prefix(self) -> Memelang: return '' if self.mode == Q else (self.mode + SA)
 
 
-# VEC {SV VEC}
 class Matrix(Node):
 	opr: Token = TOK_SV
-	def pad(self, padding:Axis) -> None:
+	def pad(self, padding:Limit) -> None:
 		max_len = 0
 		for idx, vec in enumerate(self):
 			if vec.mode != Q: continue
@@ -330,49 +324,49 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 	
 	while tokens.peek():
 
-		# AXIS
-		axis = Axis(Left(), Right())
-
-		# MODE
+		# VECTOR MODE
 		if tokens.peek()=='MODE':
 			if vec: raise Err('E_VEC_MODE')
 			mode = tokens.next().lex
 			if mode not in VOCAB: raise Err(f'E_MODE {mode}')
 
+		# AXIS:0 LIMIT
+		limit = Limit(Left(), Right())
+
 		# LEFT
-		if tokens.peek() in VOCAB[mode]['MOD']: axis[L].append(parse_term(Token('WILD', ELIDE), tokens, bind, mode))
+		if tokens.peek() in VOCAB[mode]['MOD']: limit[L].append(parse_term(Token('WILD', ELIDE), tokens, bind, mode))
 
 		# FUNC
 		while tokens.peek()=='SF':
-			if not axis[L]: axis[L].append(TERM_ELIDE)
+			if not limit[L]: limit[L].append(TERM_ELIDE)
 			tokens.next()
 			t = tokens.next()
 			if t.kind=='VAR': bind.append(t.lex)
 			elif t.lex not in VOCAB[mode]['FUNC']: raise Err(f'E_FUNC_NAME :{t.lex}')
-			axis[L].append(t)
+			limit[L].append(t)
 			
 		# CMP
 		if tokens.peek() in VOCAB[mode]['CMP']:
-			axis.opr=tokens.next()
+			limit.opr=tokens.next()
 			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err(f'E_CMP_DAT {tokens.next()}')
 
 		# RIGHT
 		while tokens.peek() in VOCAB[mode]['DAT']:
-			if not axis[L]: axis[L].append(TERM_ELIDE)
-			axis[R].append(parse_term(tokens.next(), tokens, bind, mode))
+			if not limit[L]: limit[L].append(TERM_ELIDE)
+			limit[R].append(parse_term(tokens.next(), tokens, bind, mode))
 			if tokens.peek()=='OR':
 				tokens.next()
 				if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
 			if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
 
-		if axis[L] and not axis[R]: axis[R]=Right(Term(Token('WILD',ELIDE)))
+		if limit[L] and not limit[R]: limit[R]=Right(Term(Token('WILD',ELIDE)))
 
-		if axis[R]:
-			axis[L], axis[R] = axis[L].check(), axis[R].check()
-			vec.prepend(axis.check()) # AXES HIGH->LOW
+		if limit[R]:
+			limit[L], limit[R] = limit[L].check(), limit[R].check()
+			vec.prepend(limit.check()) # AXIS:0 HIGH->LOW
 			continue
 
-		# VECTOR
+		# AXIS:1 VECTOR
 		if tokens.peek()=='SV':
 			if vec: 
 				vec.mode=mode
@@ -382,7 +376,7 @@ def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
 			bind.append(SAME)
 			continue
 
-		# MATRIX
+		# AXIS:2 MATRIX
 		if tokens.peek()=='SM':
 			if vec: 
 				vec.mode=mode
@@ -430,11 +424,11 @@ class Meme(Node):
 			if not isinstance(mat, Matrix): raise TypeError('E_TYPE_MAT')
 			for vec in mat:
 				if not isinstance(vec, Vector): raise TypeError('E_TYPE_VEC')
-				for axis in vec:
-					if not isinstance(axis, Axis): raise TypeError('E_TYPE_AXIS')
-			pad_axis=Axis(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
-			pad_axis.opr=Token('EQL',ELIDE)
-			mat.pad(pad_axis)
+				for limit in vec:
+					if not isinstance(limit, Limit): raise TypeError('E_TYPE_LIMIT')
+			pad_limit=Limit(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
+			pad_limit.opr=Token('EQL',ELIDE)
+			mat.pad(pad_limit)
 
 		return self
 
@@ -444,8 +438,8 @@ class Meme(Node):
 	def embed(self):
 		for mat in self:
 			for vec in mat:
-				for axis in vec:
-					for bucket in (axis[L][0:1], axis[R]):
+				for limit in vec:
+					for bucket in (limit[L][0:1], limit[R]):
 						for term in bucket:
 							if term.opr.kind in {'COS','L2','IP'} and len(term)==2 and term[R].kind in {'QUOT','ALNUM'}: term[R] = self.embedify(term[R])
 
@@ -491,13 +485,13 @@ class SQL():
 		return SQL(term.opr.lex.join(dat.lex for dat in dats), [p for dat in dats for p in dat.params])
 
 	@staticmethod
-	def single(axis: Axis, bind: dict) -> 'SQL':
-		return SQL() if axis.single.dat is None else SQL.dat(axis.single, bind)
+	def single(limit: Limit, bind: dict) -> 'SQL':
+		return SQL() if limit.single.dat is None else SQL.dat(limit.single, bind)
 
 	@staticmethod
-	def select(axis: Axis, bind: dict, alias: str = '') -> 'SQL':
-		left = SQL.term(axis[L][L], bind)
-		for t in axis[L][R:]:
+	def select(limit: Limit, bind: dict, alias: str = '') -> 'SQL':
+		left = SQL.term(limit[L][L], bind)
+		for t in limit[L][R:]:
 			if t.lex in SQL.tally:
 				if left.agg == AHAV: raise Err('E_DBL_AGG')
 				left.agg = AHAV
@@ -508,19 +502,19 @@ class SQL():
 		return left
 		
 	@staticmethod
-	def where(axis: Axis, bind: dict) -> 'SQL':
-		if axis.single.kind==WILD: return SQL()
-		sym = SQL.cmp2sql[axis.opr.kind]
+	def where(limit: Limit, bind: dict) -> 'SQL':
+		if limit.single.kind==WILD: return SQL()
+		sym = SQL.cmp2sql[limit.opr.kind]
 		lp, rp, right, ts = '', '', '', []
 		params = []
 
-		if len(axis[R]) > 1:
+		if len(limit[R]) > 1:
 			lp, rp = '(', ')'
-			right = ' AND ' if axis.opr.kind in ('NOT','DSML') else ' OR '
+			right = ' AND ' if limit.opr.kind in ('NOT','DSML') else ' OR '
 
-		select = SQL.select(axis, bind)
+		select = SQL.select(limit, bind)
 		params.extend(select.params)
-		for t in axis[R]:
+		for t in limit[R]:
 			where = SQL.term(t, bind)
 			if 'ILIKE' in sym: where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')")
 			ts.append(f"{select.lex} {sym} {where.lex}")
@@ -557,12 +551,12 @@ class MemePGSQL(Meme):
 		tab_idx: int = 0
 		sql: List[SQL] = []
 		VAL, COL, TAB = 0, 1, 2
-		axes = (VAL, COL, TAB)
+		axis0 = (VAL, COL, TAB)
 
 		for mat in self:
 			sel_all, tab_alias = False, None
 			froms, wheres, selects, ords, groups, havings, bind = [], [], [], [], [], [], {}
-			prev = {axis:None for axis in axes}
+			prev = {limit:None for limit in axis0}
 			config = {M: {'lim':0,'beg':0,'sim':0.5}}
 			for k in config[M]: bind[SIGIL+k]=SQL(PH, [config[M][k]])
 
@@ -592,7 +586,7 @@ class MemePGSQL(Meme):
 				if vec.mode!=Q: continue
 				if len(vec)<3: raise Err('E_Q_LEN')
 
-				curr = {name: None for name in axes}
+				curr = {name: None for name in axis0}
 				
 				# TAB
 				bind[WILD], bind[SAME] = None, prev[TAB]
@@ -635,9 +629,9 @@ class MemePGSQL(Meme):
 				elif 'des' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
 
 				# BIND VARS			
-				for axis in axes:
-					for t in vec[axis][L][R:]:
-						if t.kind=='VAR': bind[t.lex]=curr[axis]
+				for limit in axis0:
+					for t in vec[limit][L][R:]:
+						if t.kind=='VAR': bind[t.lex]=curr[limit]
 
 				prev = curr.copy()
 

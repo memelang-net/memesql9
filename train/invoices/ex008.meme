@@ -32,7 +32,7 @@ invoices invoice_date >=2025-01-01;<=2025-01-31;id _;invoice_items invoice_id @;
 invoices customer_id 515;status open;invoice_date 2024-09-09;due_date :asc;_;;
 
 // Customers similar to Northwind Holdings created on 2025-04-01 with similarity at least 0.65
-customers name <=>"Northwind Holdings">=0.65;created 2025-04-01;_;;
+customers name <=>"Northwind Holdings"<=0.65;created 2025-04-01;_;;
 
 // Top 20 invoice numbers by total sum in May 2025
 invoices invoice_date >=2025-05-01;<=2025-05-31;total :sum:des;invoice_no :grp;%m lim 20;;
@@ -56,7 +56,7 @@ invoices invoice_date >=2025-10-01;<=2025-10-31;total :avg:des>=500;customer_id 
 invoices invoice_date 2025-06-01;id _;invoice_items invoice_id @;id :cnt:des;invoice_id :grp;;
 
 // Active products close to 'Thunderbolt adapter pro' on 2023-11-11, similarity at least 0.8
-products name <=>"Thunderbolt adapter pro">=0.8;created 2023-11-11;active 1;_;;
+products name <=>"Thunderbolt adapter pro"<=0.8;created 2023-11-11;active 1;_;;
 
 // On 2024-02-29, maximum invoice total per customer, show customer name, highest first
 invoices invoice_date 2024-02-29;total :max:des;customer_id :grp;customers id @;name _;;
@@ -323,7 +323,7 @@ products unit_price >=0;<=10;created 2024-02-29;name ~"Test";sku :asc;_;;
 invoices invoice_date 2025-08-20;id _;invoice_items invoice_id @;unit_price >=30;id :cnt:des;product_id :grp;products id @;sku _;;
 
 // Customers similar to Bright Labs LLC created on 2024-06-01 with similarity at least 0.7
-customers name <=>"Bright Labs LLC">=0.7;created 2024-06-01;_;;
+customers name <=>"Bright Labs LLC"<=0.7;created 2024-06-01;_;;
 
 // Overdue invoices from 2025-02-01 to 2025-02-28 with totals 200..900, newest due dates first
 invoices status overdue;invoice_date >=2025-02-01;<=2025-02-28;total >=200;<=900;due_date :des;_;;

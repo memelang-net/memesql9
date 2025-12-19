@@ -68,46 +68,46 @@ actors name :des~"son";_;;
 movies year :des=1999;_;;
 
 // Time travel movies
-movies description <=>"time travel">=$sim;_;;
+movies description <=>"time travel"<=$sim;_;;
 
 // Movies involving Vietnam
-movies description <=>"Vietnam">=$sim;_;;
+movies description <=>"Vietnam"<=$sim;_;;
 
 // Heist-related movies
-movies description <=>"heist">=$sim;_;;
+movies description <=>"heist"<=$sim;_;;
 
 // Robot-themed films
-movies description <=>"robot">=$sim;_;;
+movies description <=>"robot"<=$sim;_;;
 
 // Space exploration titles
-movies description <=>"space exploration">=$sim;_;;
+movies description <=>"space exploration"<=$sim;_;;
 
 // Serial killer thrillers
-movies description <=>"serial killer">=$sim;_;;
+movies description <=>"serial killer"<=$sim;_;;
 
 // Coming-of-age stories
-movies description <=>"coming of age">=$sim;_;;
+movies description <=>"coming of age"<=$sim;_;;
 
 // Post-apocalyptic films
-movies description <=>"post apocalyptic">=$sim;_;;
+movies description <=>"post apocalyptic"<=$sim;_;;
 
 // World War II movies
-movies description <=>"world war ii">=$sim;_;;
+movies description <=>"world war ii"<=$sim;_;;
 
 // Artificial intelligence themes
-movies description <=>"artificial intelligence">=$sim;_;;
+movies description <=>"artificial intelligence"<=$sim;_;;
 
 // Romantic comedy picks with sim>=.75
-movies description <=>"romantic comedy">=0.75;_;;
+movies description <=>"romantic comedy"<=0.75;_;;
 
 // Superhero adventure movies sim=0.67
-movies description <=>"superhero">=0.67;_;;
+movies description <=>"superhero"<=0.67;_;;
 
 // Classic westerns
-movies description <=>"western">=$sim;_;;
+movies description <=>"western"<=$sim;_;;
 
 // Films with dystopian society narratives sim>.33
-movies description <=>"dystopian">0.33;_;;
+movies description <=>"dystopian"<0.33;_;;
 
 // Show 15 newest movies
 movies year :des;_;%m lim 15;;

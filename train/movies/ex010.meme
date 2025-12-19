@@ -44,7 +44,7 @@ movies year 1990;description ~"robot";title :des;%m lim 7;%m beg 14;;
 movies description <=>"space battle":des;%m lim 10;;
 
 // Titles similar to 'Star Trek' at similarity 0.6 or higher;newest years first;show 5
-movies title <=>"Star Trek">=0.6;year :des;%m lim 5;;
+movies title <=>"Star Trek"<=0.6;year :des;%m lim 5;;
 
 // Keanu Reeves roles with ratings between 3.5 and 5 in 2003 movies
 movies year 2003;title _;roles movie @;actor "Keanu Reeves";rating >=3.5;<=5;_;;
@@ -74,7 +74,7 @@ movies genre scifi;description ~"alien";year >=1975;<=1985;title :asc;%m lim 20;
 movies description <=>"space exploration":des;year >=1900;%m lim 12;;
 
 // Comedies from 1998 with title similar to "office" (min similarity 0.25)
-movies title <=>"office">=0.25;genre comedy;year 1998;_;;
+movies title <=>"office"<=0.25;genre comedy;year 1998;_;;
 
 // Actors whose names include Ana or Ann between ages 20 and 35, sorted A-Z, 15 starting at 10
 actors name :asc~"Ana","Ann";age >=20;<=35;%m lim 15;%m beg 10;;

@@ -8,7 +8,7 @@ locations country "US";region "NY";id _;departments location_id @;id _;employees
 payroll_runs status paid;pay_date 2024-12-31;id _;payroll_entries payroll_run_id @;gross_pay :avg;currency :grp;;
 
 // Employees with reviews similar to strategic planning (>=0.88) and their latest review date
-performance_reviews comments <=>"strategic planning">=0.88;review_date :max;employee_id :grp;employees id @;first_name _;last_name _;;
+performance_reviews comments <=>"strategic planning"<=0.88;review_date :max;employee_id :grp;employees id @;first_name _;last_name _;;
 
 // Total requested hours by type for employee 101 in 2025-11, types A-Z
 time_off_requests employee_id 101;request_date >=2025-11-01;<=2025-11-30;hours :sum;type :grp:asc;;
@@ -53,7 +53,7 @@ time_off_requests type sick;start_date >=2025-03-01;<=2025-03-31;hours :sum:des;
 benefit_plans type medical;active 1;name :asc;id _;employee_benefits benefit_plan_id @;start_date <=2025-01-15;end_date >=2025-01-15;employee_id _;employees id @;first_name _;last_name _;;
 
 // Off-cycle payroll runs similar to off cycle, processed only, newest first limit 20
-payroll_runs status processed;notes <=>"off cycle">=$sim;pay_date :des;_;%m lim 20;;
+payroll_runs status processed;notes <=>"off cycle"<=$sim;pay_date :des;_;%m lim 20;;
 
 // Currencies used in payroll entries during 2025-11, list A-Z
 payroll_entries created >=2025-11-01;<=2025-11-30;currency :grp:asc;;
@@ -89,7 +89,7 @@ departments id :cnt>=2;location_id :grp;locations id @;country "CA";name _;;
 timesheets week_start >=2025-10-01;<=2025-10-31;hours_worked :max;employee_id :grp;employees id @;first_name _;last_name _;;
 
 // Skill names similar to Kubernetes (sim>=0.88), newest created first limit 30
-skills name <=>"Kubernetes">=0.88;created :des;_;%m lim 30;;
+skills name <=>"Kubernetes"<=0.88;created :des;_;%m lim 30;;
 
 // Active life plans as of 2025-09-01 with enrolled counts desc
 benefit_plans type life;active 1;id _;employee_benefits benefit_plan_id @;start_date <=2025-09-01;end_date >=2025-09-01;id :cnt:des;benefit_plan_id :grp;;
@@ -155,7 +155,7 @@ employees department_id 30;employee_skills employee_id @;skill_id _;skills id @;
 payroll_runs pay_date :asc>=2025-12-01;<=2025-12-31;id _;payroll_entries payroll_run_id @;net_pay :sum>=100000;gross_pay :sum;payroll_run_id :grp;;
 
 // Reviews mentioning growth (sim>=0.85), most recent first with employee names
-performance_reviews comments <=>"growth">=0.85;review_date :des;employee_id _;employees id @;first_name _;last_name _;;
+performance_reviews comments <=>"growth"<=0.85;review_date :des;employee_id _;employees id @;first_name _;last_name _;;
 
 // Job bands P2 or P4 with max_salary 120000..200000, title A-Z
 jobs grade "P2","P4";max_salary >=120000;<=200000;title :asc;_;;

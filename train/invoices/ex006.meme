@@ -228,7 +228,7 @@ customers created >=2024-01-01;<=2024-01-31;phone ~"212-";email :asc;_;;
 products unit_price >=10;<=20;created 2025-09-09;sku :asc;_;;
 
 // Customer name similar to 'Northwind Trading Inc' on 2025-05-05, threshold 0.7
-customers name <=>"Northwind Trading Inc">=0.7;created 2025-05-05;_;;
+customers name <=>"Northwind Trading Inc"<=0.7;created 2025-05-05;_;;
 
 // Top 5 invoice numbers by average tax in 2024-03
 invoices invoice_date >=2024-03-01;<=2024-03-31;tax :avg:des;invoice_no :grp;%m lim 5;;

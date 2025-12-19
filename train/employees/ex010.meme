@@ -128,7 +128,7 @@ employees id 550;job_id _;@ @ @;employees id !=550;id _;performance_reviews empl
 locations name "San Francisco";country _;@ @ @;locations id _;departments location_id @;id :cnt>=3;location_id :grp;locations id @;name :asc;;
 
 // People reporting to the same manager as Ava Lee with reviews similar to leadership (>=0.90), names
-employees first_name "Ava";last_name "Lee";id :$x;manager_id _;@ @ @;employees first_name _;last_name _;id :grp!=$x;performance_reviews employee_id @;comments <=>"leadership">=0.90;;
+employees first_name "Ava";last_name "Lee";id :$x;manager_id _;@ @ @;employees first_name _;last_name _;id :grp!=$x;performance_reviews employee_id @;comments <=>"leadership"<=0.90;;
 
 // Entries in the same currency as payroll entry 9001 during 2025-11, top 10 by net_pay with names
 payroll_entries id 9001;currency _;@ @ @;payroll_entries id !=9001;created >=2025-11-01;<=2025-11-30;net_pay :des;employee_id _;employees id @;first_name _;last_name _;%m lim 10;;
@@ -137,7 +137,7 @@ payroll_entries id 9001;currency _;@ @ @;payroll_entries id !=9001;created >=202
 locations name "Austin";region _;@ @ @;locations id _;departments location_id @;id _;employees department_id @;salary :avg>=100000;department_id :grp;departments id @;name _;;
 
 // Jobs in the same grade as a title similar to Software Architect (>=0.77), titles A-Z, first 20
-jobs title <=>"Software Architect">=0.77;id :$x;grade _;@ @ @;jobs id !=$x;title :asc;%m lim 20;;
+jobs title <=>"Software Architect"<=0.77;id :$x;grade _;@ @ @;jobs id !=$x;title :asc;%m lim 20;;
 
 // Employees reviewed by the same reviewer as employee 77 during 2025 with rating 4+ sorted by rating desc
 performance_reviews employee_id 77;review_date >=2025-01-01;<=2025-12-31;reviewer_id _;@ @ @;performance_reviews rating :des>=4;employee_id _;employees id @;first_name _;last_name _;;

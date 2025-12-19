@@ -65,7 +65,7 @@ customers name ~"Vega";id _;invoices customer_id @;status open;due_date 2025-12-
 products created 2024-11-11;unit_price :des>75;name ~"Cable";_;;
 
 // Customers similar to 'Global Tech Partners' created on 2024-04-10
-customers name <=>"Global Tech Partners">=$sim;created 2024-04-10;_;;
+customers name <=>"Global Tech Partners"<=$sim;created 2024-04-10;_;;
 
 // Top 15 customers by total invoiced in 2025-06, include customer name
 invoices invoice_date >=2025-06-01;<=2025-06-30;total :sum:des;customer_id :grp;customers id @;name _;%m lim 15;;
@@ -191,5 +191,5 @@ invoices status overdue;total :sum;due_date :grp:asc>=2025-01-01;<=2025-03-31;;
 invoices invoice_date >=2024-01-01;<=2024-12-31;total :avg:des;customer_id :grp;customers id @;name _;%m lim 20;;
 
 // Invoice_no similar to 'INV-2025-09-01' with similarity at least 0.8, newest created first, all fields
-invoices invoice_no <=>"INV-2025-09-01">=0.8;created :des;_;;
+invoices invoice_no <=>"INV-2025-09-01"<=0.8;created :des;_;;
 

@@ -23,7 +23,7 @@ comments id 7000;user_id :$x;post_id _;@ @ @;user_id !=$x;follows follower_id @;
 users username "olivia";id :$x;likes user_id @;created_at =2025-06-01;post_id _;@ @ @;user_id !=$x;users id @;username :asc;_;;
 
 // Profiles in the same city as profile 123 with bios like photography at 0.65+, names A-Z, limit 15
-profiles id 123;user_id :$x;location _;@ @ @;bio <=>"photography">=0.65;user_id !=$x;full_name :asc;_;%m lim 15;;
+profiles id 123;user_id :$x;location _;@ @ @;bio <=>"photography"<=0.65;user_id !=$x;full_name :asc;_;%m lim 15;;
 
 // Co-followers of the same followee as lucas on 2025-01-15, excluding lucas, usernames A-Z
 users username "lucas";id :$x;follows follower_id @;created_at =2025-01-15;followee_id _;@ @ @;created_at =2025-01-15;follower_id !=$x;users id @;username :asc;;

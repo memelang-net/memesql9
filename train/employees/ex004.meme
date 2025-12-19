@@ -176,7 +176,7 @@ locations created >=2023-01-01;<=2023-06-30;name :asc;_;;
 payroll_entries tax_withheld 0;id :cnt>=2;employee_id :grp;employees id @;first_name _;last_name _;;
 
 // reviews about communication by similarity>=0.85, newest first, first 20
-performance_reviews comments <=>"communication">=0.85;review_date :des;_;%m lim 20;;
+performance_reviews comments <=>"communication"<=0.85;review_date :des;_;%m lim 20;;
 
 // average salary by employee status where avg >= 70000 sorted by status
 employees salary :avg>=70000;status :grp:asc;;
@@ -254,7 +254,7 @@ timesheets week_start 2025-02-10;hours_worked :sum>=40;approver_id :grp;employee
 payroll_entries currency "USD";tax_withheld 0;payroll_run_id _;payroll_runs id @;pay_date _;;
 
 // Reviews in 2025-05 about leadership (sim>=0.8), newest first
-performance_reviews review_date :des>=2025-05-01;<=2025-05-31;comments <=>"leadership">=0.8;_;;
+performance_reviews review_date :des>=2025-05-01;<=2025-05-31;comments <=>"leadership"<=0.8;_;;
 
 // Employees who took parental leave in 2024 (unique ids)
 time_off_requests type parental;start_date >=2024-01-01;<=2024-12-31;employee_id :grp;;

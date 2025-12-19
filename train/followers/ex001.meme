@@ -197,7 +197,7 @@ profiles full_name "Jane Doe";_;;
 profiles full_name !="Test User";_;;
 
 // Bio semantic about "photography" (sim>=0.60)
-profiles bio <=>"photography">=0.60;_;;
+profiles bio <=>"photography"<=0.60;_;;
 
 // Bio contains "engineer"
 profiles bio ~"engineer";_;;

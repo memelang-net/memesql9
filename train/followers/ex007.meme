@@ -110,10 +110,10 @@ users username "ben";id _;posts user_id @;created_at >2024-10-01;id :grp;comment
 users username "nina";id _;follows follower_id @;followee_id _;messages sender_id @;created_at >=2025-02-01;recipient_id :grp;id :cnt:des;;
 
 // Austin profiles with photography-like bios at 0.65+ similarity, names ascending
-profiles location "Austin";bio <=>"photography">=0.65;full_name :asc;_;;
+profiles location "Austin";bio <=>"photography"<=0.65;full_name :asc;_;;
 
 // Public posts about promo (similarity 0.55+) after 2024-04-01, newest first, limit 12
-posts visibility =public;body <=>"promo">=0.55;created_at :des>=2024-04-01;_;%m lim 12;;
+posts visibility =public;body <=>"promo"<=0.55;created_at :des>=2024-04-01;_;%m lim 12;;
 
 // Users with .net emails created in 2024, latest update first, first 30
 users email ~".net";created_at >=2024-01-01;<=2024-12-31;updated_at :des;_;%m lim 30;;
@@ -155,7 +155,7 @@ users username "emily";id _;messages recipient_id @;sender_id >=100;created_at :
 posts visibility =public;created_at >=2025-01-01;id :grp;likes post_id @;id :cnt:des;;
 
 // Austin profiles with photography-like bios at 0.70+ updated newest first, show 10
-profiles location "Austin";bio <=>"photography">=0.70;updated_at :des;_;%m lim 10;;
+profiles location "Austin";bio <=>"photography"<=0.70;updated_at :des;_;%m lim 10;;
 
 // Unread messages mentioning 'invoice' after 2024-03-01, sender id ascending, page 15 offset 30
 messages body ~"invoice";read_flag !=true;created_at >2024-03-01;sender_id :asc;_;%m lim 15;%m beg 30;;
@@ -224,7 +224,7 @@ users username "omar";id _;messages sender_id @;created_at >2025-04-01;recipient
 profiles location "Paris";user_id :grp;comments user_id @;created_at :max:des>=2025-01-01;;
 
 // Profiles with bios like travel and .io websites, updated latest first
-profiles bio <=>"travel">=$sim;website ~".io";updated_at :des;_;;
+profiles bio <=>"travel"<=$sim;website ~".io";updated_at :des;_;;
 
 // Users with gmail created on or after 2024-04-01, usernames ascending, limit 15
 users email ~"@gmail.com";created_at >=2024-04-01;username :asc;_;%m lim 15;;
@@ -245,7 +245,7 @@ users username "zoe";id _;follows followee_id @;follower_id >=100;users id @;use
 users username "lily";id _;follows followee_id @;follower_id :grp;messages sender_id @;created_at >=2025-05-01;id :cnt:des;;
 
 // Public posts with sale semantics at 0.60+ and newest first, limit 20
-posts body <=>"sale">=0.60;visibility =public;created_at :des;_;%m lim 20;;
+posts body <=>"sale"<=0.60;visibility =public;created_at :des;_;%m lim 20;;
 
 // likes id per post since 2024-01-15
 likes id :cnt;created_at >=2024-01-15;post_id :grp;;
@@ -281,7 +281,7 @@ comments post_id >=50;user_id :grp;id :cnt:des;;
 users username "max";id _;follows follower_id @;followee_id :grp;posts user_id @;created_at :max>=2024-12-01;id :cnt;;
 
 // Public posts about hiring plan at similarity 0.60 or higher, PNG images, newest first, limit 15
-posts body <=>"hiring plan">=0.60;visibility =public;image_url ~".png";created_at :des;_;%m lim 15;;
+posts body <=>"hiring plan"<=0.60;visibility =public;image_url ~".png";created_at :des;_;%m lim 15;;
 
 // People who commented on sara posts on 2025-07-15, profile names A-Z
 users username "sara";id _;posts user_id @;id _;comments post_id @;created_at 2025-07-15;user_id _;profiles user_id @;full_name :asc;_;;
@@ -299,7 +299,7 @@ messages sender_id 42;recipient_id 100;created_at :des>=2024-03-01;<=2024-03-31;
 users username "mira";id _;follows follower_id @;id _;followee_id :grp;posts user_id @;created_at >=2025-01-01;id :cnt:des;;
 
 // Locations with travel-like bios (0.60+), keep at least 50 profiles, sort counts desc
-profiles full_name _;bio <=>"travel">=0.60;user_id :cnt:des>=50;location :grp;;
+profiles full_name _;bio <=>"travel"<=0.60;user_id :cnt:des>=50;location :grp;;
 
 // Gmail users updated during 2024, sort username asc then created_at desc, page 2 size 25
 users email ~"@gmail.com";updated_at >=2024-01-01;<=2024-12-31;username :asc;created_at :des;_;%m lim 25;%m beg 25;;
@@ -401,7 +401,7 @@ users id >=200;<=400;email !~"@spam.org";created_at <=2024-12-31;username :asc;_
 likes post_id 42;user_id :$x;post_id _;@ @ @;user_id !=$x;users id @;username :asc;_;;
 
 // Profile counts per city for bios similar to photography at 0.60, cities A-Z
-profiles bio <=>"photography">=0.60;user_id :cnt;location :grp:asc;;
+profiles bio <=>"photography"<=0.60;user_id :cnt;location :grp:asc;;
 
 // Senders who messaged kai on 2024-07-04 and also liked post 99, usernames A-Z
 users username "kai";id _;messages recipient_id @;created_at 2024-07-04;sender_id _;likes user_id @;post_id 99;user_id _;users id @;username :asc;_;;

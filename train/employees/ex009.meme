@@ -98,7 +98,7 @@ timesheets week_start 2025-08-04;overtime_hours :des>40;approver_id _;employees 
 performance_reviews comments ~"roadmap";rating <=3.0;created :des;_;;
 
 // Pay runs with notes similar to off-cycle (sim>0.85) in 2025-11, pay_date asc limit 20
-payroll_runs notes <=>"off-cycle">0.85;pay_date :asc>=2025-11-01;<=2025-11-30;_;%m lim 20;;
+payroll_runs notes <=>"off-cycle"<0.85;pay_date :asc>=2025-11-01;<=2025-11-30;_;%m lim 20;;
 
 // Employees with family coverage ending on 2025-09-30, include plan type and emails
 employee_benefits coverage_level family;end_date 2025-09-30;benefit_plan_id _;benefit_plans id @;type _;employee_id _;employees id @;email _;;
@@ -179,7 +179,7 @@ employee_benefits coverage_level family;start_date <=2025-01-01;end_date >=2025-
 payroll_entries created >=2025-04-01;<=2025-04-30;gross_pay :sum:des>=50000;employee_id :grp;employees id @;first_name _;last_name _;;
 
 // High-rated reviews about mentorship (sim>=0.85) on 2025-09-01, order by rating desc and include reviewer names
-performance_reviews comments <=>"mentorship">=0.85;review_date 2025-09-01;rating :des;reviewer_id _;employees id @;first_name _;last_name _;;
+performance_reviews comments <=>"mentorship"<=0.85;review_date 2025-09-01;rating :des;reviewer_id _;employees id @;first_name _;last_name _;;
 
 // Employees with bonus_target > 0 hired in 2021, department name and bonus_target desc
 employees hire_date >=2021-01-01;<=2021-12-31;bonus_target :des>0;department_id _;departments id @;name _;;

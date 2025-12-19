@@ -36,7 +36,7 @@ posts user_id >100;_;;
 posts user_id !=7;_;;
 
 // Body semantic about "product launch" (sim>=0.60)
-posts body <=>"product launch">=0.60;_;;
+posts body <=>"product launch"<=0.60;_;;
 
 // Body contains "sale"
 posts body ~"sale";_;;
@@ -225,7 +225,7 @@ profiles full_name "Jane Doe";_;;
 profiles full_name !="Test User";_;;
 
 // profiles bio semantic about "photography" (sim>=0.60)
-profiles bio <=>"photography">=0.60;_;;
+profiles bio <=>"photography"<=0.60;_;;
 
 // profiles bio contains engineer
 profiles bio ~"engineer";_;;
@@ -342,7 +342,7 @@ posts user_id >100;_;;
 posts user_id !=7;_;;
 
 // post body semantic about "product launch" (sim>=0.60)
-posts body <=>"product launch">=0.60;_;;
+posts body <=>"product launch"<=0.60;_;;
 
 // post body contains sale
 posts body ~"sale";_;;

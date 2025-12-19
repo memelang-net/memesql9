@@ -275,7 +275,7 @@ performance_reviews comments <=>"teamwork":des;_;;
 performance_reviews created 2025-07-07;_;;
 
 // performance reviews relating to teamwork, similarity>=0.9
-performance_reviews comments <=>"teamwork">=0.9;_;;
+performance_reviews comments <=>"teamwork"<=0.9;_;;
 
 // performance reviews relating to communication skills (sim>0.75) order by sim
 performance_reviews comments <=>"communication skills":des>0.75;_;;

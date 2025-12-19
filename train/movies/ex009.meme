@@ -2,64 +2,64 @@
 movies description <=>"heist":des;_;%m lim 25;beg 25;;
 
 // Top 12 actors in robot-themed films by average role rating
-movies description <=>"robot">=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 12;;
+movies description <=>"robot"<=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 12;;
 
 // 8 heist movies by total role count
-movies description <=>"heist">=$sim;title :grp;roles movie @;id :cnt:des;%m lim 8;;
+movies description <=>"heist"<=$sim;title :grp;roles movie @;id :cnt:des;%m lim 8;;
 
 // Top 10 actors from space exploration films by max rating
-movies description <=>"space exploration">=$sim;title _;roles movie @;rating :max:des;actor :grp;%m lim 10;;
+movies description <=>"space exploration"<=$sim;title _;roles movie @;rating :max:des;actor :grp;%m lim 10;;
 
 // Comedy wedding films ranked by highest average role rating (top 7)
-movies genre comedy;description <=>"wedding">=$sim;title :grp;roles movie @;rating :avg:des;%m lim 7;;
+movies genre comedy;description <=>"wedding"<=$sim;title :grp;roles movie @;rating :avg:des;%m lim 7;;
 
 // Dystopia sci-fi: actors A-Z by total ratings, show 15
-movies genre scifi;description <=>"dystopia">=$sim;title _;roles movie @;rating :sum;actor :grp:asc:des;%m lim 15;;
+movies genre scifi;description <=>"dystopia"<=$sim;title _;roles movie @;rating :sum;actor :grp:asc:des;%m lim 15;;
 
 // Revenge-themed films ranked by minimum role rating, top 5
-movies description <=>"revenge">=$sim;title :grp;roles movie @;rating :min:des;%m lim 5;;
+movies description <=>"revenge"<=$sim;title :grp;roles movie @;rating :min:des;%m lim 5;;
 
 // War-related movies with highest average role rating, top 12
-movies description <=>"war">=$sim;title :grp;roles movie @;rating :avg:des;%m lim 12;;
+movies description <=>"war"<=$sim;title :grp;roles movie @;rating :avg:des;%m lim 12;;
 
 // Post apocalypse films with the largest casts, top 9
-movies description <=>"post apocalypse">=$sim;title :grp;roles movie @;id :cnt:des;%m lim 9;;
+movies description <=>"post apocalypse"<=$sim;title :grp;roles movie @;id :cnt:des;%m lim 9;;
 
 // Music documentaries: actors Z-A grouped by name, first 10 by max rating
-movies genre documentary;description <=>"music">=$sim;title _;roles movie @;rating :max;actor :grp:des:des;%m lim 10;;
+movies genre documentary;description <=>"music"<=$sim;title _;roles movie @;rating :max;actor :grp:des:des;%m lim 10;;
 
 // Political intrigue dramas after 1970: top 20 actors by average rating
-movies year >1970;genre drama;description <=>"political intrigue">=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 20;;
+movies year >1970;genre drama;description <=>"political intrigue"<=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 20;;
 
 // Top 12 actors in AI-themed movies by average role rating
-movies description <=>"artificial intelligence">=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 12;;
+movies description <=>"artificial intelligence"<=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 12;;
 
 // Space opera films ranked by cast size, top 15
-movies description <=>"space opera">=$sim;title :grp;roles movie @;id :cnt:des;%m lim 15;;
+movies description <=>"space opera"<=$sim;title :grp;roles movie @;id :cnt:des;%m lim 15;;
 
 // Dystopian sci-fi since 1990: best 10 actors by max rating
-movies genre scifi;year >=1990;description <=>"dystopian">=$sim;title _;roles movie @;rating :max:des;actor :grp;%m lim 10;;
+movies genre scifi;year >=1990;description <=>"dystopian"<=$sim;title _;roles movie @;rating :max:des;actor :grp;%m lim 10;;
 
 // Heist comedies with the largest casts, top 8
-movies genre comedy;description <=>"heist">=$sim;title :grp;roles movie @;id :cnt:des;%m lim 8;;
+movies genre comedy;description <=>"heist"<=$sim;title :grp;roles movie @;id :cnt:des;%m lim 8;;
 
 // War stories before 1980: top 12 movies by minimum role rating
-movies year <1980;description <=>"war">=$sim;title :grp;roles movie @;rating :min:des;%m lim 12;;
+movies year <1980;description <=>"war"<=$sim;title :grp;roles movie @;rating :min:des;%m lim 12;;
 
 // Music documentaries ranked by average role rating, top 10
-movies genre documentary;description <=>"music">=$sim;title :grp;roles movie @;rating :avg:des;%m lim 10;;
+movies genre documentary;description <=>"music"<=$sim;title :grp;roles movie @;rating :avg:des;%m lim 10;;
 
 // Post apocalypse dramas after 2000 with biggest casts, top 9
-movies genre drama;year >2000;description <=>"post apocalypse">=$sim;title :grp;roles movie @;id :cnt:des;%m lim 9;;
+movies genre drama;year >2000;description <=>"post apocalypse"<=$sim;title :grp;roles movie @;id :cnt:des;%m lim 9;;
 
 // best 7 actors by total ratings in Family road trip films
-movies description <=>"family road trip">=$sim;title _;roles movie @;rating :sum:des;actor :grp;%m lim 7;;
+movies description <=>"family road trip"<=$sim;title _;roles movie @;rating :sum:des;actor :grp;%m lim 7;;
 
 // top 20 actors in Dream-themed movies by average rating
-movies description <=>"dreams">=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 20;;
+movies description <=>"dreams"<=$sim;title _;roles movie @;rating :avg:des;actor :grp;%m lim 20;;
 
 // Sports underdog films (sim > 0.5) by max role rating top 6
-movies description <=>"sports underdog">0.5;title :grp;roles movie @;rating :max:des;%m lim 6;;
+movies description <=>"sports underdog"<0.5;title :grp;roles movie @;rating :max:des;%m lim 6;;
 
 // highest rated movie in 1999
 movies year 1999;title :grp;roles movie @;rating :max:des;%m lim 1;;
@@ -149,7 +149,7 @@ movies year >=1984;<=1986;genre comedy,drama;title :des;_;;
 roles rating :avg=3.7;id :cnt>=2;movie :grp;;
 
 // Three highest-rated roles in robot-themed films
-movies description <=>"robot">=$sim;title _;roles movie @;rating :des;%m lim 3;;
+movies description <=>"robot"<=$sim;title _;roles movie @;rating :des;%m lim 3;;
 
 // Actors with Sam in the name, Z-A with role counts
 roles id :cnt;actor :grp:des~"Sam";;

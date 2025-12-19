@@ -131,7 +131,7 @@ users username zach1234;id :$x;profiles user_id @;location _;@ @ @;user_id !=$x;
 users username "alice";id _;posts user_id @;visibility =public;body ~"launch";created_at :des;_;%m lim 10;;
 
 // Profiles in Austin with bio similar to photography at 0.65 threshold, order by last update desc
-profiles location "Austin";bio <=>"photography">=0.65;updated_at :des;_;;
+profiles location "Austin";bio <=>"photography"<=0.65;updated_at :des;_;;
 
 // Public posts with .png images created between 2024-01-15 and 2025-07-04, sort by id ascending
 posts visibility =public;image_url ~".png";created_at >=2024-01-15;<=2025-07-04;id :asc;_;;
@@ -179,7 +179,7 @@ profiles location ~"San";avatar_url ~".png";created_at <2025-01-01;full_name :as
 users updated_at 2025-02-20,2025-02-21;username !="admin";id :asc;_;;
 
 // Public posts semantically about 'summer trip' at 0.70+ and with .jpg image, sort by updated_at desc
-posts body <=>"summer trip">=0.70;visibility =public;image_url ~".jpg";updated_at :des;_;;
+posts body <=>"summer trip"<=0.70;visibility =public;image_url ~".jpg";updated_at :des;_;;
 
 // Users with ids 7 or 9 whose email does not contain @spam.org, username ascending
 users id 7,9;email !~"@spam.org";username :asc;_;;
@@ -233,10 +233,10 @@ messages body ~"project";sender_id 120;recipient_id 300;created_at :asc>=2024-02
 users username :asc!="admin";created_at :des>=2024-03-01;<=2024-12-31;email ~".org";_;;
 
 // Profiles about photography (semantic min 0.60) in York, newest updates first, show 5
-profiles bio <=>"photography">=0.60;location ~"York";updated_at :des;_;%m lim 5;;
+profiles bio <=>"photography"<=0.60;location ~"York";updated_at :des;_;%m lim 5;;
 
 // Public posts with promo semantics (min 0.55) created after 2024-01-15, newest first
-posts visibility =public;body <=>"promo">=0.55;created_at :des>=2024-01-15;_;;
+posts visibility =public;body <=>"promo"<=0.55;created_at :des>=2024-01-15;_;;
 
 // Likes from users 42 to 2500 on posts 10+, id at least 10, newest first
 likes user_id >=42;<=2500;post_id >=10;id >=10;created_at :des;_;;
@@ -266,7 +266,7 @@ messages body ~"invoice";read_flag !=true;created_at :des>=2024-03-01;<=2024-12-
 users username :asc!="admin","root";email ~".org";updated_at >=2024-01-01;<=2024-12-31;_;;
 
 // Profiles with photography-like bios and https sites updated on or after 2024-05-01, newest first, limit 25
-profiles bio <=>"photography">=0.70;website ~"https://";updated_at :des>=2024-05-01;_;%m lim 25;;
+profiles bio <=>"photography"<=0.70;website ~"https://";updated_at :des>=2024-05-01;_;%m lim 25;;
 
 // Comments from user ids 5 to 1000 containing thanks, id ascending
 comments user_id >=5;<=1000;body ~"thanks";id :asc;_;;

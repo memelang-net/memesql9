@@ -8,7 +8,7 @@ departments name ~"Marketing";id _;employees department_id @;hire_date :des;firs
 departments id :cnt:des>=3;location_id :grp;locations id @;name _;;
 
 // Employees whose review comments similar to customer focus (>=0.88), show emails and review_date desc first 25
-performance_reviews comments <=>"customer focus">=0.88;review_date :des;employee_id _;employees id @;email _;%m lim 25;;
+performance_reviews comments <=>"customer focus"<=0.88;review_date :des;employee_id _;employees id @;email _;%m lim 25;;
 
 // Sum of net_pay per currency for entries with gross_pay >= 4000 and currency USD or EUR, sort sum desc
 payroll_entries gross_pay >=4000;net_pay :sum:des;currency :grp="USD","EUR";;
@@ -92,7 +92,7 @@ employees id :cnt>=20;department_id :grp;departments id @;name name ~"Tech";loca
 benefit_plans active 1;id :cnt>=5;type :grp:asc;;
 
 // Reviews related to initiative (sim>=0.80), newest first with reviewer names
-performance_reviews comments <=>"initiative">=0.80;review_date :des;reviewer_id _;employees id @;first_name _;last_name _;;
+performance_reviews comments <=>"initiative"<=0.80;review_date :des;reviewer_id _;employees id @;first_name _;last_name _;;
 
 // Terminated employees hired before 2015-01-01 by last name A-Z
 employees status terminated;hire_date <2015-01-01;first_name _;last_name :asc;_;;
@@ -122,7 +122,7 @@ jobs grade ~"S";title _;id _;employees job_id @;hire_date 2022-05-15;salary :des
 timesheets id :cnt:des>=3;approver_id :grp;employees id @;last_name _;first_name _;;
 
 // Reviews about leadership (sim>=0.90) on 2025-01-10 ordered by rating, first 15
-performance_reviews comments <=>"leadership">=0.9;review_date 2025-01-10;rating :des;_;%m lim 15;;
+performance_reviews comments <=>"leadership"<=0.9;review_date 2025-01-10;rating :des;_;%m lim 15;;
 
 // Retirement benefit enrollments in 2024 with plan name and employee names
 benefit_plans type retirement;name _;id _;employee_benefits benefit_plan_id @;start_date >=2024-01-01;<=2024-12-31;employee_id _;employees id @;first_name _;last_name _;;

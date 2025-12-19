@@ -104,7 +104,7 @@ posts id 42;user_id _;@ @ @;id !=42;visibility =public;image_url ~".png";created
 profiles user_id 42;location _;@ @ @;user_id !=42;website ~".org";full_name :asc;_;;
 
 // More posts by the author of post 777 with body similar to 'travel tips' at 0.60+, newest first
-posts id 777;user_id _;@ @ @;id !=777;body <=>"travel tips">=0.60;created_at :des;_;;
+posts id 777;user_id _;@ @ @;id !=777;body <=>"travel tips"<=0.60;created_at :des;_;;
 
 // Senders who messaged the same recipient as sender 300 on 2024-09-01, exclude 300, usernames A-Z
 messages sender_id 300;created_at =2024-09-01;recipient_id _;@ @ @;sender_id !=300;users id @;username :asc;;

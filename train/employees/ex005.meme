@@ -71,7 +71,7 @@ performance_reviews review_date >=2025-02-01;<=2025-02-28;id :cnt:des;reviewer_i
 locations country "US";region :grp:asc;;
 
 // Payroll runs with notes similar >0.90 to retro pay, newest first limit 15
-payroll_runs notes <=>"retro pay">0.90;pay_date :des;_;%m lim 15;;
+payroll_runs notes <=>"retro pay"<0.90;pay_date :des;_;%m lim 15;;
 
 // Employees in grades P3 or P4 earning 85000..150000, hire_date asc first 30
 jobs grade "P3","P4";id _;employees job_id @;salary >=85000;<=150000;hire_date :asc;_;%m lim 30;;
@@ -125,7 +125,7 @@ payroll_entries created >=2024-01-01;<=2024-12-31;net_pay :sum:des;employee_id :
 payroll_entries currency "EUR","GBP";gross_pay >=2000;<=5000;net_pay :des;_;;
 
 // Reviews with ratings 3..4.5 and similar to leadership (sim>=0.80), newest first
-performance_reviews rating >=3;<=4.5;comments <=>"leadership">=0.80;review_date :des;_;;
+performance_reviews rating >=3;<=4.5;comments <=>"leadership"<=0.80;review_date :des;_;;
 
 // Departments at locations with timezone like America/New, department names A-Z
 locations timezone ~"America/New";id _;departments location_id @;name :asc;_;;
@@ -221,7 +221,7 @@ employees department_id :$x=12;last_name :asc;job_id _;jobs id @;title _;departm
 timesheets week_start 2025-03-03;approver_id :grp;employees id @;first_name _;last_name :asc;;
 
 // Reviews on 2025-01-15 mentioning leadership (sim>=0.9), show employee and reviewer names
-performance_reviews review_date 2025-01-15;comments <=>"leadership">=0.9;reviewer_id :$x;employee_id _;employees id @;last_name _;employees id $x;first_name _;last_name _;;
+performance_reviews review_date 2025-01-15;comments <=>"leadership"<=0.9;reviewer_id :$x;employee_id _;employees id @;last_name _;employees id $x;first_name _;last_name _;;
 
 // Employees with no bonus_target (0) hired 2023-01-01..2023-06-30, show emails, order by hire_date asc
 employees bonus_target 0;hire_date :asc>=2023-01-01;<=2023-06-30;email _;;
