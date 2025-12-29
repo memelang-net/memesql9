@@ -1,12 +1,9 @@
 '''
 info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
 This script is optimized for prompting LLMs
-AXIS:0 (LIMIT) IS ORDERED HIGH TO LOW
-ONE OR MORE WHITESPACES *ALWAYS* MEANS "NEW LIMIT"
-NEVER SPACE BETWEEN OPERATOR/COMPARATOR/COMMA/FUNC AND VALUES
+One or more whitespaces *always* means "new Cell"
+Never space between operator/comparator/comma/flag and values
 '''
-
-MEMELANG_VER = 9.47
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"des")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
@@ -54,10 +51,10 @@ actors name ~"Ana";age >=20;<=35;_;;
 // Roles rated below 1.5 for movies before 1980
 movies year <1980;title _;roles movie @;rating <1.5;_;;
 
-// Roles sort rating des, movie descending
+// Roles sort rating descending, movie descending
 roles rating :des;movie :des;;
 
-// All movies before 1970 ordered by year asc
+// All movies before 1970 ordered by year ascending
 movies year :asc<1970;_;;
 
 // Average performer rating at least 4.2
@@ -79,609 +76,460 @@ movies year <1980;description <=>"war"<=$sim;title :grp;roles movie @;rating :mi
 movies title "Hero","House of Flying Daggers";roles movie @;actor :asc~"Li";;
 '''
 
-import random, re, json, sys
-from typing import List, Iterator, Iterable, Dict, Tuple, Union
-
-Memelang = str
+import re, sys, json
+from typing import Optional, Union, List, Tuple, Iterator
 Err = SyntaxError
 
-ELIDE, SIGIL, WILD, MSAME, SAME, MODE, EOF =  '', '$', '_', '^', '@',  '%', None
-SA, SV, SM, SF, OR, PRETTY = ' ', ';', ';;', ':', ',', ' '
-L, R = 0, 1
+MEMELANG = {
+	'version': 9.49,
+	'length_axis0': 3,
+	'grid_pattern': [
+		# (NAME, REGEX, OUTPUT)
+		("COMM", r"//[^\n]*", ''),				# COMMENT
+		("EXPQ", r'"(?:[^"\\\n\r]|\\.)*"', ''),	# JSON-STYLE QUOTE
+		("SEP2", r"\s*;;\s*", ';; '),			# AXIS2 SEPARATOR
+		("SEP1", r"\s*;\s*", '; '),				# AXIS1 SEPARATOR
+		("SEP0", r"\s+", ' '),					# AXIS0 SEPARATOR
+		("EXPR", r"[\s\";\\]+", ''),			# LONG EXPRESSION
+		("EXPL", r".", '')						# CLEANUP EXPRESSION
+	],
+	'expr_pattern': [
+		# literals / complex
+		('DAT_QUO',   r'"(?:[^"\\\n\r]|\\.)*"'),
+		('DAT_EMB',	r'\[(?:-?\d+(?:\.\d+)?)(?:\s*,\s*-?\d+(?:\.\d+)?)*\]'),
+		('DAT_MET',	r'\%\w+'),
 
-TOKEN_KIND_PATTERNS = (
-	('COMMENT',		r'//[^\n]*'),
-	('QUOT',		r'"(?:[^"\\]|\\.)*"'),	# ALWAYS JSON QUOTE ESCAPE EXOTIC CHARS "John \"Jack\" Kennedy"
-	('MTBL',		r'-*\|'),
-	('EMB',			r'\[(?:-?\d+(?:\.\d+)?)(?:\s*,\s*-?\d+(?:\.\d+)?)*\]'), # JSON ARRAY OF DECS [0.1,0.2]
-	('POW',			r'\*\*'),
-	('MUL',			r'\*'),
-	('ADD',			r'\+'),
-	('DIV',			r'\/'),
-	('MODE',		re.escape(MODE) + r'[a-z]+'),
-	('MOD',			r'\%'),
-	('L2',			r'<->'),
-	('COS',			r'<=>'),
-	('IP',			r'<#>'),
-	('GE',			r'>='),
-	('LE',			r'<='),
-	('DSML',		r'!~'),
-	('NOT',			r'!=?'),
-	('EQL',			r'='),
-	('GT',			r'>'),
-	('LT',			r'<'),
-	('SMLR',		r'~'),
-	('WILD',		re.escape(WILD)),		# NEVER QUOTE
-	('MSAME',		re.escape(MSAME)),		# REFERENCES (MAT-1, VEC=-1, LIMIT)
-	('SAME',		re.escape(SAME)),		# REFERENCES (MAT,   VEC-1,  LIMIT)
-	('VAR',			re.escape(SIGIL) + r'[A-Za-z0-9_]+'),
-	('YMDHMS',		r'\d\d\d\d\-\d\d-\d\d\-\d\d:\d\d:\d\d'),	 	# YYYY-MM-DD-HH:MM:SS
-	('YMD',			r'\d\d\d\d\-\d\d\-\d\d'),	 					# YYYY-MM-DD
-	('ALNUM',		r'[A-Za-z][A-Za-z0-9_]*'), # ALPHANUMERICS ARE UNQUOTED
-	('DEC',			r'-?\d*\.\d+'),
-	('INT',			r'-?\d+'),
-	('SUB',			r'\-'), # AFTER INT/DEC
-	('SF',			re.escape(SF)),
-	('SM',			re.escape(SM)),
-	('SV',			re.escape(SV)),
-	('OR',			re.escape(OR)),
-	('SA',			r'\s+'),
-	('MISMATCH',	r'.'),
-)
+		# multi-char ops (order matters)
+		('MOD_L2',	 r'<->'),
+		('MOD_COS',	 r'<=>'),
+		('MOD_IP',	 r'<#>'),
+		('CMP_GE',	 r'>='),
+		('CMP_LE',	 r'<='),
+		('CMP_DSIM', r'!~'),
+		('CMP_NOT',	 r'!=?'),
 
-MASTER_PATTERN = re.compile('|'.join(f'(?P<{kind}>{pat})' for kind, pat in TOKEN_KIND_PATTERNS))
+		# single-char ops / comps
+		('CMP_EQL',	r'='),
+		('CMP_GT',	r'>'),
+		('CMP_LT',	r'<'),
+		('CMP_SIM', r'~'),
 
-IGNORE_KINDS = {'COMMENT','MTBL'}
-DELIDE = {'SAME':SAME,'MSAME':MSAME,'WILD': WILD,'EQL': '='}
+		# flags / vars
+		('BIND',	r':\$\w+'),
+		('FLAG',	r':[a-zA-Z]+'),
+		('DAT_VAR',	r'\$\w+'),
 
-Q, M = MODE+'q', MODE+'m'
-VOCAB = {
-	MODE+'tab': { # Table
-		'CMP': {'EQL','NOT','GT','GE','LT','LE'},
-		'MOD': {},
-		'DAT': {'ALNUM','QUOT','INT','DEC','SAME','MSAME','WILD'},
-		'FUNC': {'TYP','ROL','DESC'}
-	},
-	MODE+'for': { # Foreign
-		'CMP': {'EQL'},
-		'MOD': {},
-		'DAT': {'ALNUM','QUOT','SAME','MSAME','WILD'},
-		'FUNC': {}
-	},
-	MODE+'uni': { # Unique
-		'CMP': {'EQL'},
-		'MOD': {},
-		'DAT': {'ALNUM','QUOT'},
-		'FUNC': {}
-	},
-	MODE+'pri': { # Pri
-		'CMP': {'EQL'},
-		'MOD': {},
-		'DAT': {'ALNUM','QUOT'},
-		'FUNC': {}
-	},
-	Q: { # DQL
-		'CMP': {'EQL','NOT','GT','GE','LT','LE','SMLR','DSML'},
-		'MOD': {'MUL','ADD','SUB','DIV','MOD','POW','L2','IP','COS'},
-		'DAT': {'ALNUM','QUOT','INT','DEC','VAR','SAME','MSAME','WILD','EMB','YMD','YMDHMS'},
-		'FUNC': {"grp","asc","des","sum","avg","min","max","cnt","last"}
-	},
-	M: { # META
-		'CMP': {'EQL'},
-		'MOD': {},
-		'DAT': {'ALNUM','INT'}
-	}
+		# special atoms
+		('DAT_WLD', r'_'),
+		('DAT_MS',  r'\^'),
+		('DAT_AT',  r'@'),
+
+		# dates before numbers
+		('DAT_TS',  r'\d{4}-\d{2}-\d{2}-\d{2}:\d{2}:\d{2}'),
+		('DAT_YMD',	r'\d{4}-\d{2}-\d{2}'),
+
+		# numbers
+		('DAT_DEC',	r'-?\d*\.\d+'),
+		('DAT_INT',	r'-?\d+'),
+
+		# identifiers
+		('DAT_ID',  r'[A-Za-z][A-Za-z0-9_]*'),
+
+		# OR
+		('OR',	 r','),
+
+		# ignore / error
+		('WS',	 r'\s+'),
+		('MISMATCH', r'.'),
+	],
 }
 
-class Token():
-	kind: str
-	kinds: List[str]
-	lex: str
-	delide: str
-	dat: Union[str, float, int, list]
+# SYNTAX
+
+# Atomic token
+class Tok:
 	def __init__(self, kind: str, lex: str):
 		self.kind = kind
-		self.kinds = [kind]
 		self.lex = lex
-		self.delide = DELIDE[kind] if lex == '' and kind in DELIDE else lex
-		if kind=='QUOT': 	self.dat = json.loads(lex)
-		elif kind=='EMB': 	self.dat = json.loads(lex)
-		elif kind=='DEC': 	self.dat = float(lex)
-		elif kind=='INT':	self.dat = int(lex)
-		elif kind=='NULL':	self.dat = None
-		else: 				self.dat = lex
-
-	def dump(self) -> Tuple[str, Union[str, float, int, list, None]]: return (self.kind, self.dat)
-	def __str__(self) -> Memelang: return self.lex
-	def __eq__(self, other): return isinstance(other, Token) and self.kind==other.kind and self.lex==other.lex
+		if   kind == 'DAT_QUO': self.dat = json.loads(lex)
+		elif kind == 'DAT_EMB': self.dat = json.loads(lex)
+		elif kind == 'DAT_DEC': self.dat = float(lex)
+		elif kind == 'DAT_INT': self.dat = int(lex)
+		else: self.dat = lex
+	def __str__(self): return self.lex
+	def __repr__(self): return self.lex
 
 
-TOK_NULL = Token('NULL', '')
-TOK_EQL = Token('EQL', ELIDE)
-TOK_NOT = Token('NOT', '!')
-TOK_SA = Token('SA', SA)
-TOK_SV = Token('SV', SV+PRETTY)
-TOK_SM = Token('SM', SM+PRETTY)
-TOK_OR = Token('OR', OR)
-TOK_SF = Token('SF', SF)
-TOK_SEP_TOK = Token('SEP_TOK', '')
-
-class Stream:
-	def __init__(self, token: Iterable[Token]):
-		self.token: Iterator[Token] = iter(token)
-		self.buffer: List[Token] = []
-
-	def peek(self, fwd: int = 1) -> Union[str, None]:
-		while(len(self.buffer)<fwd):
-			val = next(self.token, EOF)
-			if val is EOF: return EOF
-			self.buffer.append(val)
-		return self.buffer[fwd-1].kind
-		
-	def next(self) -> Token: 
-		if not self.buffer:
-			val = next(self.token, EOF)
-			if val is EOF: raise Err('E_EOF')
-			self.buffer.append(val)
-		return self.buffer.pop(0)
+TOK_NULL = Tok('NULL', '')
+TOK_EQL_ELIDE = Tok('CMP_EQL', '')  # default, elided '='
 
 
-class Node(list):
-	opr: Token = TOK_NULL
-
-	def __init__(self, *items): super().__init__(items)
-	def prepend(self, item): self.insert(0, item)
-	def dump(self) -> List: return [self.opr.dump(), [i.dump() for i in self]]
-	def check(self) -> 'Node': 
-		if len(self)==0: raise Err('E_NODE_LIST')
-		return self
-	@property
-	def iter(self): return iter(self)
-	@property
-	def prefix(self) -> Memelang: return ''
-	@property
-	def suffix(self) -> Memelang: return ''
-	
-	def __str__(self) -> Memelang:
-		return re.sub(r'\s+', ' ', self.prefix + self.opr.lex.join(map(str, self.iter)) + self.suffix)
-
-	@property
-	def kinds(self) -> List[str]:
-		kinds=[]
-		for i in self: kinds.extend(i.kinds)
-		return kinds
+# Sequence of tokens
+class Seq(list[Tok]):
+	opr: Tok = TOK_NULL
+	def __init__(self, *items):
+		super().__init__(items)
+		self.opr = TOK_NULL
+	def __str__(self): return self.opr.lex.join(map(str, self))
 
 
-class Term(Node):
-	opr: Token = TOK_SEP_TOK
+# Predicate expression
+class Cell:
+	left: Seq
+	flag: Seq
+	comp: Tok
+	right: Seq
 
-TERM_ELIDE = Term(Token('WILD',ELIDE))
+	def __init__(self, src: str):
+		self.left = Seq()
+		self.flag = Seq()
+		self.comp = TOK_EQL_ELIDE
+		self.right = Seq()
 
+		if not MEMELANG.get('expr_regex'):
+			MEMELANG['expr_regex']=re.compile("|".join(f"(?P<{k}>{p})" for k, p in MEMELANG['expr_pattern']))
 
-class Right(Node):
-	opr: Token = TOK_OR
-	def check(self) -> 'Right':
-		if not len(self): return self
-		if any(not isinstance(t, Term) for t in self): raise Err('E_RIGHT_TERM')
-		return self
+		toks = []
+		for m in MEMELANG['expr_regex'].finditer(src):
+			kind = m.lastgroup
+			text = m.group()
+			if kind == 'WS': continue
+			if kind == 'MISMATCH': raise Err(f'E_TOK {text!r}')
+			toks.append(Tok(kind, text))
 
+		i, n = 0, len(toks)
 
-class Left(Node): 
-	opr: Token = TOK_SF
-	def check(self) -> 'Left':
-		if not len(self): return self
-		if not isinstance(self[0], Term): raise Err('E_LEFT_TERM')
-		if len(self)>1 and any(t.kind not in {'ALNUM','VAR'} for t in self[1:]): raise Err('E_LEFT_FUNC')
-		return self
+		def peek():
+			return toks[i].kind if i < n else ''
 
+		def take():
+			nonlocal i
+			if i >= n: raise Err('E_EOF')
+			t = toks[i]
+			i += 1
+			return t
 
-class Limit(Node):
-	opr: Token = TOK_EQL
-	def check(self) -> 'Limit': 
-		if len(self)!=2: raise Err('E_NODE_LIST')
-		if not isinstance(self[0], Left): raise Err('E_LIMIT_LEFT')
-		if not isinstance(self[1], Right): raise Err('E_LIMIT_RIGHT')
-		return self
-	@property
-	def single(self) -> Token:
-		return TOK_NULL if self.opr.kind != 'EQL' or len(self[R])!=1 or len(self[R][L])!=1 else self[R][L][L]
+		# LEFT (prefix MOD)
+		if peek().startswith('MOD'):
+			self.left.opr = take()
+			self.left.append(TOK_NULL)
+			t = take()
+			if not t.kind.startswith('DAT'): raise Err('E_TERM_DAT')
+			self.left.append(t)
 
+		# FLAGS
+		while peek() in {'FLAG','BIND'}:
+			self.flag.append(take())
 
-class Vector(Node):
-	opr: Token = TOK_SA
-	mode: str = Q
-	@property
-	def iter(self): return reversed(self)
-	@property
-	def prefix(self) -> Memelang: return '' if self.mode == Q else (self.mode + SA)
+		# COMPARATOR
+		if peek().startswith('CMP'):
+			self.comp = take()
+			if not peek().startswith('DAT'): raise Err('E_CMP_DAT')
 
+		# RIGHT (values, OR-joined)
+		while peek().startswith('DAT'):
+			self.right.append(take())
+			if peek() == 'OR':
+				self.right.opr = take()
+				if not peek().startswith('DAT'): raise Err('E_OR_TRAIL')
 
-class Matrix(Node):
-	opr: Token = TOK_SV
-	def pad(self, padding:Limit) -> None:
-		max_len = 0
-		for idx, vec in enumerate(self):
-			if vec.mode != Q: continue
-			if not max_len: max_len = len(vec)
-			diff = max_len - len(vec)
-			if diff>0: self[idx] += [padding] * diff
-			elif diff<0: raise Err('E_FIRST_VECTOR_ALWAYS_LONGEST')
+		if i != n: raise Err(f'E_EXPR_TRAIL {toks[i:]}')
 
-
-def lex(src: Memelang) -> Iterator[Token]:
-	for m in MASTER_PATTERN.finditer(src):
-		kind = m.lastgroup
-		if kind in IGNORE_KINDS: continue
-		if kind=='MISMATCH': raise Err(f'E_TOK {m}')
-		yield Token(kind, m.group())
-
-
-def parse(src: Memelang, mode: str = Q) -> Iterator[Matrix]:
-	tokens = Stream(lex(src))
-	bind: List[str] = []
-	mat, vec = Matrix(), Vector()
-	line = 1
-	
-	while tokens.peek():
-
-		# VECTOR MODE
-		if tokens.peek()=='MODE':
-			if vec: raise Err('E_VEC_MODE')
-			mode = tokens.next().lex
-			if mode not in VOCAB: raise Err(f'E_MODE {mode}')
-
-		# AXIS:0 LIMIT
-		limit = Limit(Left(), Right())
-
-		# LEFT
-		if tokens.peek() in VOCAB[mode]['MOD']: limit[L].append(parse_term(Token('WILD', ELIDE), tokens, bind, mode))
-
-		# FUNC
-		while tokens.peek()=='SF':
-			if not limit[L]: limit[L].append(TERM_ELIDE)
-			tokens.next()
-			t = tokens.next()
-			if t.kind=='VAR': bind.append(t.lex)
-			elif t.lex not in VOCAB[mode]['FUNC']: raise Err(f'E_FUNC_NAME :{t.lex}')
-			limit[L].append(t)
-			
-		# CMP
-		if tokens.peek() in VOCAB[mode]['CMP']:
-			limit.opr=tokens.next()
-			if tokens.peek() not in VOCAB[mode]['DAT']: raise Err(f'E_CMP_DAT {tokens.next()}')
-
-		# RIGHT
-		while tokens.peek() in VOCAB[mode]['DAT']:
-			if not limit[L]: limit[L].append(TERM_ELIDE)
-			limit[R].append(parse_term(tokens.next(), tokens, bind, mode))
-			if tokens.peek()=='OR':
-				tokens.next()
-				if tokens.peek() not in VOCAB[mode]['DAT']: raise Err('E_OR_TRAIL')
-			if tokens.peek() == 'MODE': raise Err('E_RIGHT_MODE')
-
-		if limit[L] and not limit[R]: limit[R]=Right(Term(Token('WILD',ELIDE)))
-
-		if limit[R]:
-			limit[L], limit[R] = limit[L].check(), limit[R].check()
-			vec.prepend(limit.check()) # AXIS:0 HIGH->LOW
-			continue
-
-		# AXIS:1 VECTOR
-		if tokens.peek()=='SV':
-			if vec: 
-				vec.mode=mode
-				mat.append(vec.check())
-			vec = Vector()
-			tokens.next()
-			bind.append(SAME)
-			continue
-
-		# AXIS:2 MATRIX
-		if tokens.peek()=='SM':
-			if vec: 
-				vec.mode=mode
-				mat.append(vec.check())
-			if mat: yield mat.check()
-			mat, vec = Matrix(), Vector()
-			tokens.next()
-			mode = Q
-			continue
-
-		if tokens.peek()=='SA':
-			tokens.next()
-			continue
-
-		raise Err(f'E_PARSE {tokens.next()}\n{vec}')
-
-	if vec: 
-		vec.mode=mode
-		mat.append(vec.check())
-	if mat: yield mat.check()
-
-
-def parse_term (token: Token, tokens: Stream, bind: List[str], mode: str) -> Term:
-	term = Term(token)
-	if tokens.peek() in VOCAB[mode]['MOD']:
-		term.opr=tokens.next()
-		t = tokens.next()
-		if t.kind not in VOCAB[mode]['DAT']: raise Err('E_TERM_DAT')
-		if t.kind in {'SAME', 'VAR'} and t.lex not in bind: raise Err('E_VAR_BIND')
-		term.append(t)
-	return term.check()
-
-
-class Meme(Node):
-	opr: Token = TOK_SM
-	src: Memelang
-
-	def __init__(self, src: Memelang):
-		self.src = src
-		super().__init__(*parse(src))
-		self.check()
-
-	def check(self) -> 'Meme':
-		for mat in self:
-			if not isinstance(mat, Matrix): raise TypeError('E_TYPE_MAT')
-			for vec in mat:
-				if not isinstance(vec, Vector): raise TypeError('E_TYPE_VEC')
-				for limit in vec:
-					if not isinstance(limit, Limit): raise TypeError('E_TYPE_LIMIT')
-			pad_limit=Limit(Left(TERM_ELIDE), Right(Term(Token('SAME',ELIDE))))
-			pad_limit.opr=Token('EQL',ELIDE)
-			mat.pad(pad_limit)
-
-		return self
+	# PLACEHOLDER: OVERWRITE WITH YOUR EMBEDDING FUNCTION
+	def vectorize(self, tok: Tok) -> Tok:
+		if tok.kind == 'DAT_EMB': return tok
+		if tok.kind not in {'DAT_QUO', 'DAT_ID'}: raise Err('E_EMBED')
+		return Tok('DAT_EMB', json.dumps([0.1, 0.2]))
 
 	@property
-	def suffix(self) -> Memelang: return SM
+	def single(self) -> Tok:
+		return (
+			self.right[0]
+			if self.comp.kind == 'CMP_EQL' and len(self.right) == 1
+			else TOK_NULL
+		)
 
-	def embed(self):
-		for mat in self:
-			for vec in mat:
-				for limit in vec:
-					for bucket in (limit[L][0:1], limit[R]):
-						for term in bucket:
-							if term.opr.kind in {'COS','L2','IP'} and len(term)==2 and term[R].kind in {'QUOT','ALNUM'}: term[R] = self.embedify(term[R])
-
-	# OVERWRITE WITH YOUR EMBEDDING FUNCTION
-	def embedify(self,tok: Token) -> Token:
-		if tok.kind not in {'QUOT','ALNUM'}: raise Err('E_EMBED')
-		inp: str = tok.lex
-		out: str = json.dumps([0.1,0.2])
-		return Token('EMB', out)
-
-
-
-### SQL ### 
-
-ANONE, ACNST, AGRP, AHAV = 0, 1, 2, 3
-PH, EPH = '%s', ' = %s'
-
-class SQL():
-	cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SMLR':'ILIKE','DSML':'NOT ILIKE'}
-	lex: str
-	alias: str
-	params: List[Union[int, float, str, list]]
-	agg: int|None
-	tally = {'cnt':'COUNT(1)','sum': 'SUM', 'avg': 'AVG', 'min': 'MIN', 'max': 'MAX', 'last': 'MAX'}
-
-	def __init__(self, lex: str = '', params: List[Union[int, float, str, list]] = None, agg: int = ANONE, alias: str = ''):
-		self.lex = lex
-		self.agg = agg
-		self.alias = alias
-		self.params = [] if params is None else params
-
-	@staticmethod
-	def dat(token: Token, bind: dict) -> 'SQL':
-		if token.kind in {'WILD','SAME','MSAME','VAR'}:
-			if token.delide not in bind: raise Err('E_VAR_BIND')
-			return SQL() if bind[token.delide] is None else bind[token.delide]
-		return SQL(PH, [token.dat], ACNST)
-
-	@staticmethod
-	def term(term: Term, bind: dict) -> 'SQL':
-		if not term: return SQL()
-		dats = [SQL.dat(t, bind) for t in term]
-		return SQL(term.opr.lex.join(dat.lex for dat in dats), [p for dat in dats for p in dat.params])
-
-	@staticmethod
-	def single(limit: Limit, bind: dict) -> 'SQL':
-		return SQL() if limit.single.dat is None else SQL.dat(limit.single, bind)
-
-	@staticmethod
-	def select(limit: Limit, bind: dict, alias: str = '') -> 'SQL':
-		left = SQL.term(limit[L][L], bind)
-		for t in limit[L][R:]:
-			if t.lex in SQL.tally:
-				if left.agg == AHAV: raise Err('E_DBL_AGG')
-				left.agg = AHAV
-				left.lex = SQL.tally[t.lex] + ('' if '(1)' in SQL.tally[t.lex] else '(' + left.lex + ')')
-			elif t.lex=='grp': left.agg = AGRP
-			# TO DO: FLAG CONFLICTS
-		if alias: left.alias=alias
-		return left
-		
-	@staticmethod
-	def where(limit: Limit, bind: dict) -> 'SQL':
-		if limit.single.kind==WILD: return SQL()
-		sym = SQL.cmp2sql[limit.opr.kind]
-		lp, rp, right, ts = '', '', '', []
-		params = []
-
-		if len(limit[R]) > 1:
-			lp, rp = '(', ')'
-			right = ' AND ' if limit.opr.kind in ('NOT','DSML') else ' OR '
-
-		select = SQL.select(limit, bind)
-		params.extend(select.params)
-		for t in limit[R]:
-			where = SQL.term(t, bind)
-			if 'ILIKE' in sym: where.lex = where.lex.replace(PH, "CONCAT('%', %s, '%')")
-			ts.append(f"{select.lex} {sym} {where.lex}")
-			params.extend(where.params)
-
-		return SQL(lp + right.join(ts) + rp, params, select.agg)
-
-	@property
-	def holder(self) -> str:
-		return self.lex + ( '' if not self.alias else f' AS {self.alias}')
-
-	@property
-	def param(self):
-		return None if self.lex!=PH or len(self.params)!=1 else self.params[0]
-
-	# NOT DB SAFE - FOR DEBUGGING ONLY
 	def __str__(self) -> str:
-		sql = self.lex
-		if self.alias: sql += f' AS {self.alias}'
-		for p in self.params:
-			if isinstance(p, str): v = "'" + p.replace("'", "''") + "'"
-			elif isinstance(p, list): v = json.dumps(p, separators=(',',':')) + '::VECTOR'
-			elif p is None: v = 'NULL'
-			else: v = str(p)
-			sql = sql.replace(PH, v, 1)
-		return sql
+		return f"{self.left}{self.flag}{self.comp.lex}{self.right}"
 
-	def __eq__(self, other): return isinstance(other, SQL) and str(self)==str(other)
+	def __repr__(self) -> str: return str(self)
 
-# TRANSLATE TO SQL FOR POSTGRES
-class MemePGSQL(Meme):
+
+# GRAMMAR
+
+# Semantic sequence of Cell predicates
+class Axis0(list[Cell]):
+	pass
+
+# AND-joined sequence of Axis0
+class Axis1(list[Axis0]):
+	pass
+
+# (Axis2) OR-joined sequence of Axis1
+class Grid(list[Axis1]):
+	def __init__(self, src: str):
+		self[:] = [Axis1([Axis0()])]
+		axis1 = self[0]
+		axis0 = axis1[0]
+		exprs: List[str] = []
+
+		if not MEMELANG.get('grid_regex'):
+			MEMELANG['grid_regex']=re.compile("|".join(f"(?P<{k}>{p})" for k, p, _ in MEMELANG['grid_pattern']))
+
+		for m in MEMELANG['grid_regex'].finditer(src):
+			kind = m.lastgroup
+
+			if kind.startswith("EXP"):
+				exprs.append(m.group())
+				continue
+			if not kind.startswith("SEP"): continue
+
+			rank = int(kind[3:])
+			if exprs:
+				axis0.append(Cell("".join(exprs)))
+				exprs.clear()
+
+			if rank == 0: continue
+
+			# RECTANGULARIZATION
+			if axis0[0].single.kind!='DAT_MET':
+				axis0len = len(axis0)
+				if axis0len>MEMELANG['length_axis0']: raise Err('E_AXIS0_LEN')
+				axis0[:0] = [Cell('') for _ in range(MEMELANG['length_axis0']-axis0len)]
+			
+			if rank == 1:
+				axis1.append(Axis0())
+				axis0 = axis1[-1]
+			else:
+				self.append(Axis1([Axis0()]))
+				axis1 = self[-1]
+				axis0 = axis1[-1]
+
+		if exprs: axis0.append(Cell("".join(exprs)))
+		elif not axis0:
+			axis1.pop()
+			if not axis1: self.pop()
+
+	def __str__(self) -> str:
+		if not self: return ''
+
+		sep = {int(k[3:]): out for k, _, out in MEMELANG['grid_pattern'] if k.startswith("SEP")}
+
+		groups = []
+		for axis1 in self:
+			axis0s = [sep[0].join(map(str, axis0)) for axis0 in axis1]
+			groups.append(sep[1].join(axis0s))
+
+		return re.sub(re.escape(sep[0])+'+', sep[0], sep[2].join(groups)) + sep[2].strip()
+
+
+# SQL
+
+PH = '%s'
+
+class SQL:
+	lex: str
+	param: List[Union[int, float, str, list]]
+	def __init__(self, lex: str = '', param: Optional[List[Union[int, float, str, list]]] = None):
+		self.lex = lex
+		self.param = [] if param is None else param
+
+	def __str__(self) -> str:
+		lex = self.lex
+		for p in self.param: lex = lex.replace(PH, json.dumps(p), 1)
+		return lex
+
+	def __repr__(self) -> str: return str(self)
+
+
+class Alias(str):
+	pass
+
+
+class GridPGSQL(Grid):
+
 	def select(self) -> List[SQL]:
-		self.embed()
-		tab_idx: int = 0
+
 		sql: List[SQL] = []
-		VAL, COL, TAB = 0, 1, 2
-		axis0 = (VAL, COL, TAB)
+		TAB, COL, VAL = 0, 1, 2
+		flag2sql = {':cnt':'COUNT',':sum': 'SUM', ':avg': 'AVG', ':min': 'MIN', ':max': 'MAX', ':last': 'MAX'}
+		cmp2sql = {'EQL':'=','NOT':'!=','GT':'>','GE':'>=','LT':'<','LE':'<=','SIM':'ILIKE','DSIM':'NOT ILIKE'}
+		mod2sql = {'MOD_COS': '<=>','MOD_L2': '<->','MOD_IP': '<#>'}
 
-		for mat in self:
-			sel_all, tab_alias = False, None
-			froms, wheres, selects, ords, groups, havings, bind = [], [], [], [], [], [], {}
-			prev = {limit:None for limit in axis0}
-			config = {M: {'lim':0,'beg':0,'sim':0.5}}
-			for k in config[M]: bind[SIGIL+k]=SQL(PH, [config[M][k]])
+		def deref(cell: Cell) -> Iterator[SQL]:
+			for t in cell.right:
+				if t.kind == 'DAT_VAR': key=t.lex[1:]
+				elif t.kind == 'DAT_AT': key='@'
+				else: key=None
+				if key:
+					if key not in bind: raise Err(f'E_VAR_BIND {key}')
+					val = bind[key]
+				else: val = t.dat
 
-			# Precheck if grouped
-			grouping = False
-			for vec in mat:
-				if vec.mode!=Q or len(vec)<3: continue
-				if 'grp' in set(t.lex for t in vec[VAL][L][R:]):
-					grouping = True
-					break
+				yield SQL(val) if isinstance(val, Alias) else SQL(PH, [val])
 
-			for vec in mat:
+		for axis1 in self:
+			bind = {'lim':0,'beg':0,'sim':0.5}
+			mem = [{'val':None,'alias':None,'cnt':-1} for _ in range(3)]
+			query = {'select':[],'from':[],'groupby':[],'where':[],'having':[],'orderby':[]}
+			GROUPED = False
+			ALLSELECTED = False
+			MODE = '%q'
+			for axis0 in axis1:
 
-				# META VECTORS
-				# ; %m lim 10; beg 100
-				if vec.mode==M:
-					if len(vec)!=2: raise Err('E_X_LEN')
-					key, val = vec[1].single, vec[0].single
-					if key.lex in config[M] and isinstance(val.dat, type(config[M][key.lex])):
-						config[M][key.lex] = val.dat
-						bind[SIGIL+key.lex] = SQL(PH, [val.dat])
-					else: raise Err('E_MODE_KEY')
+				if not axis0: continue
+
+				axis0str = [cell.single.lex for cell in axis0]
+
+				if axis0str == ['','','_']:
+					ALLSELECTED=True
 					continue
 
-				# QUERY VECTORS
-				# tab col term:func:func>term,term;
-				if vec.mode!=Q: continue
-				if len(vec)<3: raise Err('E_Q_LEN')
+				# META (INTENTIONALLY PERSISTS)
+				if axis0[0].single.kind=='DAT_MET':
+					MODE = axis0[TAB].single.lex
+					if axis0[TAB].single.lex=='%m': bind[axis0str[COL]]=axis0[VAL].single.dat
+				if MODE!='%q': continue
 
-				curr = {name: None for name in axis0}
-				
-				# TAB
-				bind[WILD], bind[SAME] = None, prev[TAB]
-				curr[TAB] = SQL.single(vec[TAB], bind)
+				# TABLE
+				if axis0str[TAB]=='':
+					if mem[TAB]['alias'] is None: raise Err('E_TAB_REQ')
+				else:
+					tkind = axis0[TAB].single.kind
+					if tkind == 'NULL': raise Err('E_TAB_NON')
+					# @ means self-join
+					elif tkind == 'DAT_AT':
+						if mem[TAB]['val'] is None: raise Err('E_TAB_SAME')
+						mem[TAB]['cnt']+=1
+						mem[TAB]['alias']=Alias(f"t{mem[TAB]['cnt']}")
+					# named table
+					else:
+						mem[TAB]['cnt']+=1					
+						mem[TAB]['alias']=Alias(f"t{mem[TAB]['cnt']}")
+						mem[TAB]['val']=axis0str[TAB]
+					query['from'].append(SQL(f"{mem[TAB]['val']} AS {mem[TAB]['alias']}"))
 
-				# JOIN
-				if vec[TAB].single.lex != ELIDE:
-					if curr[TAB].param is None: raise Err('E_TBL_NAME')
-					tab_alias = f't{tab_idx}'
-					tab_idx += 1
-					froms.append(SQL(curr[TAB].param, [], ACNST, tab_alias))
-
-				# COL
-				if vec[COL].single.lex in (WILD,ELIDE) and vec[VAL].single.lex==WILD:
-					sel_all=True
+	
+				# COLUMN
+				# select all
+				if axis0str[COL] == '_':
+					ALLSELECTED=True
 					continue
+				# update column alias with new table alias on self-join
+				elif axis0str[COL] in ('','@'):
+					mem[COL]['alias']=Alias(f"{mem[TAB]['alias']}.{mem[COL]['val']}")
+				# named column
+				else:
+					mem[COL]['cnt']+=1
+					if axis0[COL].single.kind != 'NULL':
+						mem[COL]['alias']=Alias(f"{mem[TAB]['alias']}.{axis0str[COL]}")
+						mem[COL]['val']=axis0str[COL]
 
-				bind[SAME], bind[WILD] = prev[COL], None
-				curr[COL] = SQL.single(vec[COL], bind)
-				if curr[COL].param is None: raise Err('E_COL_NAME')
-				#selects.append(curr[COL])
+				# VALUE
+				mem[VAL]['alias']=mem[COL]['alias']
+				mem[VAL]['val']=mem[COL]['alias']
 
-				# VAL
-				bind[SAME],bind[WILD] = prev[VAL], SQL(tab_alias + '.' + curr[COL].params[0])
-				curr[VAL] = SQL.single(vec[VAL], bind)
+				# MOD
+				if axis0[VAL].left.opr.kind in mod2sql:
+					v = axis0[VAL].vectorize(axis0[VAL].left[1])
+					mem[VAL]['alias'] = Alias(f"({mem[VAL]['alias']}{mod2sql[axis0[VAL].left.opr.kind]}'{v.lex}'::VECTOR)")
 
-				if vec[VAL].single.kind!='WILD': wheres.append(SQL.where(vec[VAL], bind))
+				flags = [str(f) for f in axis0[VAL].flag]
+				agged = False
 
-				funcs = set(t.lex for t in vec[VAL][L][R:])
-				if grouping and not bool(funcs & (set(SQL.tally) | {'grp'})): 
-					vec[VAL][L].append(Token('ALNUM', 'last'))
-					if vec[VAL].opr.lex == ELIDE: vec[VAL].opr = Token('EQL','=')
+				# aggregate
+				for flag,agg in flag2sql.items():
+					if flag in flags:
+						if agged: raise Err('E_AGG_AGG')
+						mem[VAL]['alias']=Alias(f"{agg}({mem[VAL]['alias']})")
+						agged=True
 
-				select = SQL.select(vec[VAL], bind) # f"{tab_alias}_{curr[COL].param}"
-				selects.append(select)
+				# group by
+				if ':grp' in flags:
+					if agged: raise Err('E_GRP_AGG')
+					GROUPED = True
+					query['groupby'].append(SQL(mem[COL]['alias']))
 
-				# AGG/SORT
-				if 'grp' in funcs: groups.append(select)
-				if 'asc' in funcs: ords.append(SQL(select.lex+' ASC', select.params, ANONE))
-				elif 'des' in funcs: ords.append(SQL(select.lex+' DESC', select.params, ANONE))
+				# sort
+				if ':asc' in flags: query['orderby'].append(SQL(mem[VAL]['alias']))
+				elif ':des' in flags: query['orderby'].append(SQL(mem[VAL]['alias']+' DESC'))
 
-				# BIND VARS			
-				for limit in axis0:
-					for t in vec[limit][L][R:]:
-						if t.kind=='VAR': bind[t.lex]=curr[limit]
+				# select
+				sel=SQL(mem[VAL]['alias'])
+				if not query['select'] or query['select'][-1].lex!=sel.lex:
+					query['select'].append(sel)
 
-				prev = curr.copy()
+				# where/having
+				if axis0[VAL].right and axis0[VAL].single.lex!='_':
+					rights = list(deref(axis0[VAL]))
+					wparams = [p for r in rights for p in r.param]
+					commas = ','.join([r.lex for r in rights])
 
-			if grouping: 
-				#if sel_all: raise Err('E_SELALL_GRP')
-				selects = [s for s in selects if s.agg>ANONE]
-			elif sel_all: selects.append(SQL(f'{tab_alias}.*', [], ANONE))
+					hw = 'having' if agged else 'where'
+
+					compkind = axis0[VAL].comp.kind[4:]
+					
+					if len(rights)==1 and compkind not in {'SIM', 'DSIM'}: query[hw].append(SQL(f"{mem[VAL]['alias']} {cmp2sql[compkind]} {commas}", wparams))
+					else:
+						if compkind=='EQL':    query[hw].append(SQL(f"{mem[VAL]['alias']} IN ({commas})", wparams))
+						elif compkind=='NOT':  query[hw].append(SQL(f"{mem[VAL]['alias']} NOT IN ({commas})", wparams))
+						elif compkind=='SIM':  query[hw].append(SQL('('+" OR ".join([f"{mem[VAL]['alias']} ILIKE CONCAT('%', %s, '%')" for _ in rights])+')',wparams))
+						elif compkind=='DSIM': query[hw].append(SQL('('+" AND ".join([f"{mem[VAL]['alias']} NOT ILIKE CONCAT('%', %s, '%')" for _ in rights])+')',wparams))
+						else: raise Err('E_COMP_OR')
+
+				# bind
+				bind['@']=Alias(mem[VAL]['alias'])
+				for flag in axis0[VAL].flag:
+					if flag.kind=='BIND': bind[flag.lex[2:]]=Alias(mem[VAL]['alias'])
+
+			if ALLSELECTED:
+				query['select']=[]
+				for f in query['from']:
+					m = re.search(r"\bAS\s+(t\d+)\b", f.lex)
+					query['select'].append(SQL(f"{m.group(1)}.*"))
+			elif GROUPED:
+				groupstrs=[s.lex for s in query['groupby']]
+				for s in query['select']:
+					if '(' not in s.lex[1:] and s.lex not in groupstrs: s.lex=f"MAX({s.lex})"
+
+			if not query['from']:
+				sql.append(SQL(''))
+				continue
 
 			SQLPARTS=[
-				['SELECT', ', ', selects, True],
-				['FROM', ', ', froms, True],
-				['WHERE', ' AND ', [p for p in wheres if p.agg<AHAV], False],
-				['GROUP BY', ', ', groups, False],
-				['HAVING', ' AND ', [p for p in wheres if p.agg==AHAV], False],
-				['ORDER BY', ', ', ords, False]
+				['SELECT', ', ', 'select'],
+				['FROM', ', ', 'from'],
+				['WHERE', ' AND ', 'where'],
+				['GROUP BY', ', ', 'groupby'],
+				['HAVING', ' AND ', 'having'],
+				['ORDER BY', ', ', 'orderby'],
 			]
 
-			sqlstr,space,params='','',[]
-			for keyword, sep, items, usealias in SQLPARTS:
-				if not items: continue
-				itemstr = sep.join([(s.holder if usealias else s.lex)  for s in items if s.lex])
-				if not itemstr: continue
-				sqlstr+=space+keyword+' '+itemstr
-				params.extend(p for s in items for p in s.params if p is not None)
-				space = ' '
+			sqlstr,params='',[]
+			for keyword, sep, ikey in SQLPARTS:
+				if not query[ikey]: continue
+				sqlstr+=' '+keyword+' '+sep.join([s.lex for s in query[ikey]])
+				for s in query[ikey]: params.extend(s.param)
 
-			if config[M]['lim']: sqlstr += f" LIMIT {config[M]['lim']}"
-			if config[M]['beg']: sqlstr += f" OFFSET {config[M]['beg']}"
+			if bind['lim']: sqlstr += f" LIMIT {int(bind['lim'])}"
+			if bind['beg']: sqlstr += f" OFFSET {int(bind['beg'])}"
 
-			sql.append(SQL(sqlstr, params))
-
+			sql.append(SQL(sqlstr[1:], params))
 		return sql
 
 
-### CLI ###
+# MAIN
 
 if __name__ == "__main__":
-	lines = []
-	if len(sys.argv)==2:
-		meme = MemePGSQL(sys.argv[1])
-		print(str(meme))
-		print(meme.select())
-	elif len(sys.argv)==3 and sys.argv[1]=='file':
-		with open(sys.argv[2], encoding='utf-8') as f: lines = [l.rstrip() for l in f]
+	if len(sys.argv)>1: lines=[' '.join(sys.argv[1:])]
 	else: lines = examples.splitlines()
 
 	if lines:
-		for i in range(len(lines) - 1):
-			if lines[i].startswith('// '):
-				print(f'//{i}{lines[i]}')
-				meme = MemePGSQL(lines[i + 1])
-				print(str(meme))
+		for i in range(len(lines)):
+			if not len(lines[i]): continue
+			elif lines[i].startswith('// '): print(f'//{i}{lines[i]}')
+			else:
+				grid=GridPGSQL(lines[i])
+				print(str(grid))
+				print(str(grid.select()[0]))
 				print()
