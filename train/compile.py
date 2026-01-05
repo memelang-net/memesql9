@@ -18,7 +18,7 @@ if __name__ == "__main__":
 			for file in glob(f'./{group}/ex*.meme'):
 				with open(file, encoding='utf-8') as f: lines = [l.rstrip() for l in f]
 				for i in range(len(lines) - 1):
-					if lines[i].startswith('// '):
+					if lines[i].startswith('""" '):
 						total+=1
 						print(f'{file} {i} {lines[i]}')
 						meme = MemePGSQL(lines[i + 1])

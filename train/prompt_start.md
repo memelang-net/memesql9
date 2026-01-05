@@ -1,5 +1,5 @@
 These files are LLM training data for a DSL query language. Create new training data for a new schema.
-* Output in markdown box as `// user natural language query\nMEMELANG\n\n`
+* Output in markdown box as `""" user natural language query """\nMEMELANG\n\n`
 * Each comment is a user's natural language search query. 
 	* Phrase each distinctly - do not repeat a pattern
 	* Phrase concisely - never use superfluous phrases like "Give," "Return," or "List."
@@ -16,14 +16,14 @@ SCHEMA:
 %tab users id :TYP=INT;>0;username :DESC="Unique handle";:TYP=STR;email :DESC="User email";:TYP=STR;password_hash :DESC="Hashed password";:TYP=STR;created_at :DESC="Signup timestamp";:TYP=TS;updated_at :DESC="Last profile change";:TYP=TS;;%tab profiles id :TYP=INT;>0;user_id :DESC="Owner user id";:TYP=INT;>0;full_name :TYP=STR;bio :TYP=STR;location :TYP=STR;website :TYP=STR;avatar_url :TYP=STR;birthday :TYP=DATE;created_at :TYP=TS;updated_at :TYP=TS;;%tab follows id :TYP=INT;>0;follower_id :DESC="User who follows";:TYP=INT;>0;followee_id :DESC="User being followed";:TYP=INT;>0;created_at :TYP=TS;;%tab posts id :TYP=INT;>0;user_id :DESC="Author";:TYP=INT;>0;body :DESC="Post content";:TYP=STR;image_url :TYP=STR;visibility =public,friends,private;:TYP=STR;created_at :TYP=TS;updated_at :TYP=TS;;%tab comments id :TYP=INT;>0;post_id :DESC="Parent post";:TYP=INT;>0;user_id :DESC="Author";:TYP=INT;>0;parent_comment_id :DESC="Threaded parent";:TYP=INT;body :DESC="Comment text";:TYP=STR;created_at :TYP=TS;updated_at :TYP=TS;;%tab likes id :TYP=INT;>0;user_id :DESC="Who liked";:TYP=INT;>0;post_id :DESC="Liked post";:TYP=INT;>0;created_at :TYP=TS;;%tab messages id :TYP=INT;>0;sender_id :DESC="From user";:TYP=INT;>0;recipient_id :DESC="To user";:TYP=INT;>0;body :DESC="Message text";:TYP=STR;created_at :TYP=TS;read_flag :DESC="Read state";:TYP=BOOL;; %for users id _;profiles user_id @;follows follower_id @;follows followee_id @;posts user_id @;comments user_id @;messages sender_id @;messages recipient_id @;likes user_id @;;%for posts id _;comments post_id @;likes post_id @;;%for comments id _;comments parent_comment_id @;;%pri users id;;%uni users username;;%uni users email;;%pri profiles id;;%uni profiles user_id;;%pri follows id;;%pri posts id;;%pri comments id;;%pri likes id;;%pri messages id;;%uni follows follower_id;followee_id;;%uni likes user_id;post_id;;
 ```
 
-Create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
+Create the following examples for the schema. Output in markdown box as `""" user natural language query """\nMEMELANG\n\n`.
 * for each table, 3 examples that each select all columns
 * for each table, for each column, 3 examples that each filter on just that column
 	* use < > >= <= ~ <=> !~ != = where applicable
 * for each table, for each column, 3 examples that each filter on just that column using TWO values such as =X,Y or !=X,Y or ~X,Y or !=X,Y
 
 
-Now create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
+Now create the following examples for the schema. Output in markdown box as `""" user natural language query """\nMEMELANG\n\n`.
 * for each table, for each column, 3 examples that sort asc on just that column
 * for each table, for each column, 3 examples that sort asc on just that column
 * for each table, 6 examples that sort on 2-3 columns, mixing :asc and :des
@@ -34,7 +34,7 @@ Now create the following examples for the schema. Output in markdown box as `// 
 * for each table, 4 examples that filter on 2-4 columns and sort on one column with a %m lim X;beg Y
 
 
-Now create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
+Now create the following examples for the schema. Output in markdown box as `""" user natural language query """\nMEMELANG\n\n`.
 * 10 examples using :grp for distinct
 	* use non-unique columns
 * 10 examples using :sum and :grp
@@ -44,7 +44,7 @@ Now create the following examples for the schema. Output in markdown box as `// 
 * 10 examples using :cnt and :grp
 
 
-Now create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
+Now create the following examples for the schema. Output in markdown box as `""" user natural language query """\nMEMELANG\n\n`.
 * 10 examples using :cnt|sum|min|max|avg and :grp and a filter column
 * 10 examples using group-filter :grp[<|>|=|!=|~|!~|<=>]X with a :cnt|sum|min|max|avg
 * 10 examples using group :grp and a filter on :cnt|sum|min|max|avg<>=X
@@ -53,7 +53,7 @@ Now create the following examples for the schema. Output in markdown box as `// 
 * 10 join examples using @, projecting two column value not available in one table
 
 
-Now create the following examples for the schema. Output in markdown box as `// user natural language query\nMEMELANG\n\n`.
+Now create the following examples for the schema. Output in markdown box as `""" user natural language query """\nMEMELANG\n\n`.
 * 20 multi-hop join examples
 * 20 examples that include :cnt|sum|min|max|avg and :grp and :asc|des and a filter and an @ join
 * 20 examples that assign a variable :$x[!=|~|!~|>|<|>=|<=] to an unknown value, then join _ to @, then reference the variable as col $x or col !$x.

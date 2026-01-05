@@ -1,9 +1,12 @@
 '''
-info@memelang.net | (c)2025 HOLTWORK LLC | Patents Pending
-This script is optimized for prompting LLMs
-One or more whitespaces *always* means "new Cell"
+info@memelang.net | (c)2026 HOLTWORK LLC | Patents Pending
+This script parses MEMELANG, a terse query DSL with axial grammar
+Grid(Axis2) -> Axis1 -> Axis0 -> Cell
+Whitespaces are syntatic and trigger "new Cell"
 Never space between operator/comparator/comma/flag and values
 '''
+
+MEMELANG_VER = 9.50
 
 syntax = '[table WS] [column WS] ["<=>" "\"" string "\""] [":" "$" var][":" ("min"|"max"|"cnt"|"sum"|"avg"|"last"|"grp")][":" ("asc"|"des")] [("="|"!="|">"|"<"|">="|"<="|"~"|"!~") (string|int|float|("$" var)|"@"|"_")] ";"'
 
@@ -18,61 +21,61 @@ examples = '''
 %uni actors id;;
 %uni movies id;;
 
-// All movies
+""" All movies """
 movies _ _;;
 
-// Every film
+""" Every film """
 movies _ _;;
 
-// Roles
+""" Roles """
 roles _ _;;
 
-// Titles and descriptions for movies
+""" Titles and descriptions for movies """
 movies title _;description _;;
 
-// Actor name and ages
+""" Actor name and ages """
 actors name _;age _;;
 
-// Actors age 41 years or older
+""" Actors age 41 years or older """
 actors age >=41;_;;
 
-// Role 567 and 9766324436
+""" Role 567 and 9766324436 """
 roles id 567,9766324436;_;;
 
-// Films with dystopian society narratives sim>.33
+""" Films with dystopian society narratives sim>.33 """
 movies description <=>"dystopian"<0.33;_;;
 
-// Movies titled with Star released in 1977 or 1980
+""" Movies titled with Star released in 1977 or 1980 """
 movies title ~"Star";year 1977,1980;_;;
 
-// Actors named like Ana aged 20 to 35 inclusive
+""" Actors named like Ana aged 20 to 35 inclusive """
 actors name ~"Ana";age >=20;<=35;_;;
 
-// Roles rated below 1.5 for movies before 1980
+""" Roles rated below 1.5 for movies before 1980 """
 movies year <1980;title _;roles movie @;rating <1.5;_;;
 
-// Roles sort rating descending, movie descending
+""" Roles sort rating descending, movie descending """
 roles rating :des;movie :des;;
 
-// All movies before 1970 ordered by year ascending
+""" All movies before 1970 ordered by year ascending """
 movies year :asc<1970;_;;
 
-// Average performer rating at least 4.2
+""" Average performer rating at least 4.2 """
 roles rating :avg>=4.2;actor :grp;;
 
-// Minimum role rating by actor, low to high
+""" Minimum role rating by actor, low to high """
 roles rating :min:asc;actor :grp;;
 
-// Roles in movies mentioning robot rated 3+
+""" Roles in movies mentioning robot rated 3+ """
 movies description <=>"robot"<=$sim;title _;roles movie @;rating >=3;;
 
-// Costars seen with Bruce Willis and Uma Thurman
+""" Costars seen with Bruce Willis and Uma Thurman """
 roles actor :$a~"Bruce Willis","Uma Thurman";movie _;@ @ @;actor !$a;;
 
-// War stories before 1980: top 12 movies by minimum role rating
+""" War stories before 1980: top 12 movies by minimum role rating """
 movies year <1980;description <=>"war"<=$sim;title :grp;roles movie @;rating :min:des;%m lim 12;;
 
-// Roles for movies Hero or House of Flying Daggers where actor name includes Li, actor A-Z
+""" Roles for movies Hero or House of Flying Daggers where actor name includes Li, actor A-Z """
 movies title "Hero","House of Flying Daggers";roles movie @;actor :asc~"Li";;
 '''
 
@@ -80,71 +83,41 @@ import re, sys, json
 from typing import Optional, Union, List, Tuple, Iterator
 Err = SyntaxError
 
-MEMELANG = {
-	'version': 9.49,
-	'length_axis0': 3,
-	'grid_pattern': [
-		# (NAME, REGEX, OUTPUT)
-		("COMM", r"//[^\n]*", ''),				# COMMENT
-		("EXPQ", r'"(?:[^"\\\n\r]|\\.)*"', ''),	# JSON-STYLE QUOTE
-		("SEP2", r"\s*;;\s*", ';; '),			# AXIS2 SEPARATOR
-		("SEP1", r"\s*;\s*", '; '),				# AXIS1 SEPARATOR
-		("SEP0", r"\s+", ' '),					# AXIS0 SEPARATOR
-		("EXPR", r"[\s\";\\]+", ''),			# LONG EXPRESSION
-		("EXPL", r".", '')						# CLEANUP EXPRESSION
-	],
-	'expr_pattern': [
-		# literals / complex
-		('DAT_QUO',   r'"(?:[^"\\\n\r]|\\.)*"'),
-		('DAT_EMB',	r'\[(?:-?\d+(?:\.\d+)?)(?:\s*,\s*-?\d+(?:\.\d+)?)*\]'),
-		('DAT_MET',	r'\%\w+'),
 
-		# multi-char ops (order matters)
-		('MOD_L2',	 r'<->'),
-		('MOD_COS',	 r'<=>'),
-		('MOD_IP',	 r'<#>'),
-		('CMP_GE',	 r'>='),
-		('CMP_LE',	 r'<='),
-		('CMP_DSIM', r'!~'),
-		('CMP_NOT',	 r'!=?'),
+### SYNTAX ###
 
-		# single-char ops / comps
-		('CMP_EQL',	r'='),
-		('CMP_GT',	r'>'),
-		('CMP_LT',	r'<'),
-		('CMP_SIM', r'~'),
+CELL_PATTERN = (
+	('DAT_QUO',   r'"(?:[^"\\\n\r]|\\.)*"'),
+	('DAT_EMB',	r'\[(?:-?\d+(?:\.\d+)?)(?:\s*,\s*-?\d+(?:\.\d+)?)*\]'),
+	('DAT_MET',	r'\%\w+'),
+	('MOD_L2',	 r'<->'),
+	('MOD_COS',	 r'<=>'),
+	('MOD_IP',	 r'<#>'),
+	('CMP_GE',	 r'>='),
+	('CMP_LE',	 r'<='),
+	('CMP_DSIM', r'!~'),
+	('CMP_NOT',	 r'!=?'), # a!=b or a!b
+	('CMP_EQL',	r'='),
+	('CMP_GT',	r'>'),
+	('CMP_LT',	r'<'),
+	('CMP_SIM', r'~'),
+	('BIND',	r':\$\w+'),
+	('FLAG',	r':[a-zA-Z]+'),
+	('DAT_VAR',	r'\$\w+'),
+	('DAT_WLD', r'_'),
+	('DAT_MS',  r'\^'),
+	('DAT_AT',  r'@'),
+	('DAT_TS',  r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'),
+	('DAT_YMD',	r'\d{4}-\d{2}-\d{2}'),
+	('DAT_DEC',	r'-?\d*\.\d+'),
+	('DAT_INT',	r'-?\d+'),
+	('DAT_ID',  r'[A-Za-z][A-Za-z0-9_]*'),
+	('OR',	 r','),
+	('WS',	 r'\s+'),
+	('MISMATCH', r'.'),
+)
 
-		# flags / vars
-		('BIND',	r':\$\w+'),
-		('FLAG',	r':[a-zA-Z]+'),
-		('DAT_VAR',	r'\$\w+'),
-
-		# special atoms
-		('DAT_WLD', r'_'),
-		('DAT_MS',  r'\^'),
-		('DAT_AT',  r'@'),
-
-		# dates before numbers
-		('DAT_TS',  r'\d{4}-\d{2}-\d{2}-\d{2}:\d{2}:\d{2}'),
-		('DAT_YMD',	r'\d{4}-\d{2}-\d{2}'),
-
-		# numbers
-		('DAT_DEC',	r'-?\d*\.\d+'),
-		('DAT_INT',	r'-?\d+'),
-
-		# identifiers
-		('DAT_ID',  r'[A-Za-z][A-Za-z0-9_]*'),
-
-		# OR
-		('OR',	 r','),
-
-		# ignore / error
-		('WS',	 r'\s+'),
-		('MISMATCH', r'.'),
-	],
-}
-
-# SYNTAX
+CELL_REGEX=re.compile("|".join(f"(?P<{k}>{p})" for k, p in CELL_PATTERN))
 
 # Atomic token
 class Tok:
@@ -186,11 +159,8 @@ class Cell:
 		self.comp = TOK_EQL_ELIDE
 		self.right = Seq()
 
-		if not MEMELANG.get('expr_regex'):
-			MEMELANG['expr_regex']=re.compile("|".join(f"(?P<{k}>{p})" for k, p in MEMELANG['expr_pattern']))
-
 		toks = []
-		for m in MEMELANG['expr_regex'].finditer(src):
+		for m in CELL_REGEX.finditer(src):
 			kind = m.lastgroup
 			text = m.group()
 			if kind == 'WS': continue
@@ -199,8 +169,7 @@ class Cell:
 
 		i, n = 0, len(toks)
 
-		def peek():
-			return toks[i].kind if i < n else ''
+		def peek(): return toks[i].kind if i < n else ''
 
 		def take():
 			nonlocal i
@@ -249,81 +218,75 @@ class Cell:
 			else TOK_NULL
 		)
 
-	def __str__(self) -> str:
-		return f"{self.left}{self.flag}{self.comp.lex}{self.right}"
+	def __str__(self) -> str: return f"{self.left}{self.flag}{self.comp.lex}{self.right}"
 
 	def __repr__(self) -> str: return str(self)
 
 
-# GRAMMAR
+### GRAMMAR ###
 
-# Semantic sequence of Cell predicates
-class Axis0(list[Cell]):
-	pass
+class Axis(list):
+	sep: str = None			# SEPERATOR TOKEN
+	sepreg: str = None		# SEPERATOR REG EXP
+	sepstr: str = None		# SEPERATOR OUT
+	minlen: int = 0			# FIXED LENGTH (0=No)
+	empt: bool = False		# ALLOW EMPTY SUB-AXES?
+	sub = None				# SUB-AXIS NAME
 
-# AND-joined sequence of Axis0
-class Axis1(list[Axis0]):
-	pass
-
-# (Axis2) OR-joined sequence of Axis1
-class Grid(list[Axis1]):
 	def __init__(self, src: str):
-		self[:] = [Axis1([Axis0()])]
-		axis1 = self[0]
-		axis0 = axis1[0]
+		if self.sep is None: raise Err('E_AXIS_SEP')
+		if not self.sepreg: self.sepreg = re.escape(self.sep)
+		if not self.sepstr: self.sepstr = self.sep + ' '
+		self.parse(src.strip())
+
+	@property
+	def pattern(self) -> List[Tuple[str, str]]:
+		return [
+			("COMM", r'"""(?:[^"\\\n\r]|\\.)*"""'),
+			("EXPQ", r'"(?:[^"\\\n\r]|\\.)*"'),
+			("SEP", self.sepreg),
+			("EXPM", rf"[^\"{re.escape(self.sep[0])}]+"),
+			("EXPS", r".")
+		]
+
+	def parse(self, src: str):
+		regex=re.compile("|".join(f"(?P<{k}>{p})" for k, p in self.pattern))
 		exprs: List[str] = []
 
-		if not MEMELANG.get('grid_regex'):
-			MEMELANG['grid_regex']=re.compile("|".join(f"(?P<{k}>{p})" for k, p, _ in MEMELANG['grid_pattern']))
-
-		for m in MEMELANG['grid_regex'].finditer(src):
-			kind = m.lastgroup
-
-			if kind.startswith("EXP"):
-				exprs.append(m.group())
-				continue
-			if not kind.startswith("SEP"): continue
-
-			rank = int(kind[3:])
-			if exprs:
-				axis0.append(Cell("".join(exprs)))
+		for m in regex.finditer(src):
+			if m.lastgroup in {"EXPQ", "EXPM", "EXPS"}: exprs.append(m.group())
+			elif m.lastgroup == "SEP" and (exprs or self.empt):
+				self.append(self.sub("".join(exprs)))
 				exprs.clear()
 
-			if rank == 0: continue
+		if exprs: self.append(self.sub("".join(exprs)))
 
-			# RECTANGULARIZATION
-			if axis0[0].single.kind!='DAT_MET':
-				axis0len = len(axis0)
-				if axis0len>MEMELANG['length_axis0']: raise Err('E_AXIS0_LEN')
-				axis0[:0] = [Cell('') for _ in range(MEMELANG['length_axis0']-axis0len)]
-			
-			if rank == 1:
-				axis1.append(Axis0())
-				axis0 = axis1[-1]
-			else:
-				self.append(Axis1([Axis0()]))
-				axis1 = self[-1]
-				axis0 = axis1[-1]
-
-		if exprs: axis0.append(Cell("".join(exprs)))
-		elif not axis0:
-			axis1.pop()
-			if not axis1: self.pop()
+		if self.minlen and not src.startswith('%'): self[:0] = [self.sub('') for _ in range(self.minlen-len(self))]
 
 	def __str__(self) -> str:
-		if not self: return ''
+		items = [str(t) for t in self]
+		return self.sepstr.join([s for s in items if (s or self.empt)])
 
-		sep = {int(k[3:]): out for k, _, out in MEMELANG['grid_pattern'] if k.startswith("SEP")}
+# "Table column value" semantic sequence of Cell predicates
+class Axis0(Axis):
+	sep = ' '
+	sepstr = ' '
+	sepreg = r'\s+'
+	minlen = 3
+	sub = Cell
 
-		groups = []
-		for axis1 in self:
-			axis0s = [sep[0].join(map(str, axis0)) for axis0 in axis1]
-			groups.append(sep[1].join(axis0s))
+# AND-joined sequence of Axis0
+class Axis1(Axis):
+	sep = ';'
+	sub = Axis0
 
-		return re.sub(re.escape(sep[0])+'+', sep[0], sep[2].join(groups)) + sep[2].strip()
+# OR-joined sequence of Axis1
+class Axis2(Axis):
+	sep = ';;'
+	sub = Axis1
 
 
-# SQL
+### PG SQL ###
 
 PH = '%s'
 
@@ -346,7 +309,7 @@ class Alias(str):
 	pass
 
 
-class GridPGSQL(Grid):
+class Grid(Axis2):
 
 	def select(self) -> List[SQL]:
 
@@ -379,7 +342,7 @@ class GridPGSQL(Grid):
 
 				if not axis0: continue
 
-				axis0str = [cell.single.lex for cell in axis0]
+				axis0str = [str(cell.single.dat) for cell in axis0]
 
 				if axis0str == ['','','_']:
 					ALLSELECTED=True
@@ -404,6 +367,7 @@ class GridPGSQL(Grid):
 						mem[TAB]['alias']=Alias(f"t{mem[TAB]['cnt']}")
 					# named table
 					else:
+						if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_$]{0,62}', axis0str[TAB]): raise Err('E_TAB_CHR')
 						mem[TAB]['cnt']+=1					
 						mem[TAB]['alias']=Alias(f"t{mem[TAB]['cnt']}")
 						mem[TAB]['val']=axis0str[TAB]
@@ -417,11 +381,13 @@ class GridPGSQL(Grid):
 					continue
 				# update column alias with new table alias on self-join
 				elif axis0str[COL] in ('','@'):
+					if mem[COL]['val'] is None: raise Err('E_COL_NON')
 					mem[COL]['alias']=Alias(f"{mem[TAB]['alias']}.{mem[COL]['val']}")
 				# named column
 				else:
 					mem[COL]['cnt']+=1
 					if axis0[COL].single.kind != 'NULL':
+						if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_$]{0,62}', axis0str[COL]): raise Err('E_COL_CHR')
 						mem[COL]['alias']=Alias(f"{mem[TAB]['alias']}.{axis0str[COL]}")
 						mem[COL]['val']=axis0str[COL]
 
@@ -518,7 +484,7 @@ class GridPGSQL(Grid):
 		return sql
 
 
-# MAIN
+### CLI ###
 
 if __name__ == "__main__":
 	if len(sys.argv)>1: lines=[' '.join(sys.argv[1:])]
@@ -527,9 +493,9 @@ if __name__ == "__main__":
 	if lines:
 		for i in range(len(lines)):
 			if not len(lines[i]): continue
-			elif lines[i].startswith('// '): print(f'//{i}{lines[i]}')
+			elif lines[i].startswith('""" '): print(f'[{i}] {lines[i]}')
 			else:
-				grid=GridPGSQL(lines[i])
+				grid=Grid(lines[i])
 				print(str(grid))
 				print(str(grid.select()[0]))
 				print()
