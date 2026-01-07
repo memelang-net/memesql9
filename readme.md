@@ -1,11 +1,11 @@
-# Video
+# Documentation
 
-[![Mememlang Video](https://img.youtube.com/vi/25tJzR5pEd0/0.jpg)](https://www.youtube.com/watch?v=25tJzR5pEd0)
-
-# Detailed Documentation
+https://www.youtube.com/watch?v=25tJzR5pEd0
 
 > *Meme upon meme*
+>
 > *Grammar flows axial*
+>
 > *Knowledge takes shape*
 
 # Legal
