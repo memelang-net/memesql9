@@ -31,8 +31,8 @@ if __name__ == "__main__":
 			print(file)
 			with open(file, encoding='utf-8') as f: lines = [l.rstrip() for l in f]
 			for i in range(len(lines) - 1):
-				if lines[i].startswith('""" '):
-					line = f'[{i}] {lines[i]}'
+				if lines[i].startswith('// '):
+					line = f'//{i}{lines[i]}'
 
 					# SYNTAX
 					try:

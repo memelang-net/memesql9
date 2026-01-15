@@ -58,7 +58,7 @@ if __name__ == "__main__":
 	DB SCHEMA:
 	{schema}
 
-	EXAMPLES (`""" nat lang """\\nmemelang\\n\\n`):
+	EXAMPLES (`// nat lang\\nmemelang\\n\\n`):
 	```memelang
 	{examples}
 	```
@@ -74,12 +74,12 @@ if __name__ == "__main__":
 	DB SCHEMA:
 	{schema}
 
-	CORRECT EXAMPLES (`""" nat lang """\\nmemelang\\n\\n`):
+	CORRECT EXAMPLES (`// nat lang\\nmemelang\\n\\n`):
 	```memelang
 	{examples}
 	```
 
-	CHECK EXAMPLES (`""" nat lang """\\nmemelang\\n\\n`):
+	CHECK EXAMPLES (`// nat lang\\nmemelang\\n\\n`):
 	```memelang
 	'''
 
@@ -100,8 +100,8 @@ if __name__ == "__main__":
 				
 				for i, ex in enumerate(norm_exs):
 					if not checks[i]: continue
-					print(f'""" {ex['input']} """\n{ex['output']}\n\n', flush=True)
-					f.write(f'""" {ex['input']} """\n{ex['output']}\n\n')
+					print(f"// {ex['input']}\n{ex['output']}\n\n", flush=True)
+					f.write(f"// {ex['input']}\n{ex['output']}\n\n")
 					f.flush()
 					os.fsync(f.fileno())
 
